@@ -3,28 +3,37 @@ const btnStart = document.getElementById("button-start");
 const ctx = canvas.getContext("2d");
 const GRAVITY = 1;
 
-btnStart.addEventListener('click', () => {playBackgroundMusic(); animate(); })
-
-function playBackgroundMusic() {
-  var myAudio = document.createElement("audio");
-  myAudio.src = "./audio/background-music.mp3.ogg";
-  myAudio.volume = 0;
-  myAudio.play();
- // myAudio.pause();
-}
-let volume = 1;
-function playJumpEffect() {
-  var myAudio = document.createElement("audio");
-  myAudio.src = "./audio/jump.mp3.ogg";
-  myAudio.volume=0.5
-  console.log(myAudio.volume);
-  myAudio.play();
- // myAudio.pause();
+const audioStore = {
+  backgroundMusic: loadAudio('./audio/background-music.mp3.ogg',0.2,true),
+  monsterStompEffect: loadAudio('./audio/monster-stomp.ogg',0.7),
+  monsterStompEffect2: loadAudio('./audio/monster-stomp.ogg',0.7),
+  jumpEffect: loadAudio("./audio/jump.mp3.ogg")
 }
 
+const imageStore = {
+  brownBlock: loadImage("./img/brown-wooden-block.png"),
+  redBlock: loadImage("./img/red-wooden-block.png"), 
+  blueBlock:  loadImage("./img/blue-wooden-block.png"), 
+  floorBlock: loadImage("./img/floor-block.png"),
+  player: loadImage("./img/player.png"),
+  monsterKokoa: loadImage("./img/kokoa.png"),
+  background: loadImage("./img/background.jpg"),
+}
+
+btnStart.addEventListener('click', () => { audioStore.backgroundMusic.play(); animate(); })
+document.addEventListener('keypress', ({key}) => { if (key==="Enter") { audioStore.backgroundMusic.play(); animate(); }}) 
 
 function rectCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
   return x1 < x2 + w2 && x2 < x1 + w1 && y1 < y2 + h2 && y2 < y1 + h1;
+}
+
+function loadAudio(src, volume = 0.3
+  , loop = false) {
+  var audio = document.createElement("audio");
+  audio.volume = volume;
+  audio.loop = loop;
+  audio.src = src;
+  return audio;
 }
 
 function loadImage(src) {
@@ -32,8 +41,6 @@ function loadImage(src) {
   img.src = src;
   return img;
 }
-
-platformImg = loadImage("./img/brown-wooden-block.png");
 
 class Platform {
   position = { x: 0, y: 0 };
@@ -55,10 +62,10 @@ class Platform {
     this.collisions = collisions;
     switch (true) {
       case color === "blue":
-        this.img = loadImage("./img/brown-wooden-block.png");
+        this.img = imageStore.brownBlock
         break;
       case color === "lightgreen":
-        this.img = loadImage("./img/floor-block.png");
+        this.img = imageStore.floorBlock;
         break;
     }
   }
@@ -100,7 +107,7 @@ class Platform {
       );
     } else {
       ctx.drawImage(
-        platformImg,
+        imageStore.brownBlock,
         0,
         0,
         this.dimensions.width,
@@ -128,7 +135,7 @@ class Monster {
 
   sprites = {
     runRight: new Sprite({
-      imgSrc: "./img/kokoa.png",
+      img: imageStore.monsterKokoa,
       framesCount: 4,
       position: { x: 24, y: 160 },
       offset: { x: 128, y: 0 },
@@ -137,7 +144,7 @@ class Monster {
       framesFrequency: 3,
     }),
     runLeft: new Sprite({
-      imgSrc: "./img/kokoa.png",
+      img: imageStore.monsterKokoa,
       framesCount: 4,
       position: { x: 14, y: 416 },
       offset: { x: 128, y: 0 },
@@ -195,11 +202,11 @@ class Monster {
       if (
         this.position.y + this.dimensions.height <= platform.position.y &&
         this.position.y + this.dimensions.height + this.velocity.y >=
-          platform.position.y &&
+        platform.position.y &&
         this.position.x + this.velocity.x <
-          platform.position.x + platform.dimensions.width &&
+        platform.position.x + platform.dimensions.width &&
         this.position.x + this.dimensions.width + this.velocity.x >
-          platform.position.x
+        platform.position.x
       ) {
         this.position.y = platform.position.y - this.dimensions.height;
         this.velocity.y = 0;
@@ -293,6 +300,10 @@ class Monster {
   }
 
   die(cb) {
+    if(audioStore.monsterStompEffect.paused) 
+      audioStore.monsterStompEffect.play();
+    else 
+      audioStore.monsterStompEffect2.play();
     this.isAlive = false;
     this.isDying = true;
     this.position.x -= 5;
@@ -311,19 +322,19 @@ class Sprite {
   framesRefreshCount = 0;
   position = { x: 0, y: 0 };
   offset = { x: 0, y: 0 };
-  printOffset= { x:0, y:0};
+  printOffset = { x: 0, y: 0 };
   dimensions = { width: 0, height: 0 };
 
   constructor({
-    imgSrc,
+    img,
     framesCount,
     position,
     offset,
     dimensions,
     framesFrequency = 5,
-    printOffset = {x:0, y:0}
+    printOffset = { x: 0, y: 0 }
   }) {
-    this.img = loadImage(imgSrc);
+    this.img = img;
     this.framesCount = framesCount;
     this.position = position;
     this.offset = offset;
@@ -365,7 +376,7 @@ class Player {
   isDiying = false;
   sprites = {
     runRight: new Sprite({
-      imgSrc: "./img/player.png",
+      img: imageStore.player,
       framesCount: 3,
       position: { x: 15, y: 30 },
       offset: { x: 48, y: 0 },
@@ -373,7 +384,7 @@ class Player {
       dimensions: { width: 18, height: 18 },
     }),
     runLeft: new Sprite({
-      imgSrc: "./img/player.png",
+      img: imageStore.player,
       framesCount: 3,
       position: { x: 15, y: 78 },
       offset: { x: 48, y: 0 },
@@ -381,7 +392,7 @@ class Player {
       dimensions: { width: 18, height: 18 },
     }),
     standRight: new Sprite({
-      imgSrc: "./img/player.png",
+      img: imageStore.player,
       framesCount: 1,
       position: { x: 63, y: 30 },
       offset: { x: 0, y: 0 },
@@ -389,7 +400,7 @@ class Player {
       dimensions: { width: 18, height: 18 },
     }),
     standLeft: new Sprite({
-      imgSrc: "./img/player.png",
+      img: imageStore.player,
       framesCount: 1,
       position: { x: 63, y: 78 },
       offset: { x: 0, y: 0 },
@@ -399,7 +410,13 @@ class Player {
   };
   sprite = this.sprites.standRight;
 
-  constructor() {}
+  constructor() { }
+
+  jump() {
+    this.isJumping = true;
+    this.velocity.y = -22;
+    audioStore.jumpEffect.play();
+  }
 
   update() {
     if (this.isDying) {
@@ -433,11 +450,11 @@ class Player {
       if (
         this.position.y + this.dimensions.height <= platform.position.y &&
         this.position.y + this.dimensions.height + this.velocity.y >=
-          platform.position.y &&
+        platform.position.y &&
         this.position.x + this.velocity.x <
-          platform.position.x + platform.dimensions.width &&
+        platform.position.x + platform.dimensions.width &&
         this.position.x + this.dimensions.width + this.velocity.x >
-          platform.position.x
+        platform.position.x
       ) {
         this.position.y = platform.position.y - this.dimensions.height;
         this.velocity.y = 0;
@@ -515,7 +532,7 @@ class Player {
       ) {
         if (
           this.position.y + this.dimensions.height <
-            monster.position.y + monster.dimensions.height / 2 &&
+          monster.position.y + monster.dimensions.height / 2 &&
           this.velocity.y > 0
         ) {
           monster.die(() => monsters.splice(i, 1));
@@ -859,11 +876,11 @@ const monsters = [
     activationOffset: 80,
   }),
   new Monster({
-    position: { x: 3110, y: 60-17 },
+    position: { x: 3110, y: 60 - 17 },
     dimensions: { width: 60, height: 57 },
   }),
   new Monster({
-    position: { x: 3190, y: 60-17 },
+    position: { x: 3190, y: 60 - 17 },
     dimensions: { width: 60, height: 57 },
     activationOffset: 80,
   }),
@@ -920,13 +937,13 @@ const monsters = [
 ];
 let scrollX = 0;
 let speedBooster = 1;
-const backgroundImg = loadImage("./img/background.jpg");
+const backgroundImg = imageStore.background
 
 function playBackgroundMusic() {
   var myAudio = document.createElement("audio");
   myAudio.src = "./audio/background-music.mp3.ogg";
   myAudio.play();
- // myAudio.pause();
+  // myAudio.pause();
 }
 
 function animate() {
@@ -997,9 +1014,7 @@ addEventListener("keydown", ({ key }) => {
     case "W":
     case "ArrowUp":
       if (!player.isJumping && player.velocity.y == GRAVITY) {
-        playJumpEffect();
-        player.isJumping = true;
-        player.velocity.y = -22;
+        player.jump();
       }
       break;
     case "d":
