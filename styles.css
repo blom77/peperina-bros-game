@@ -1,0 +1,12 @@
+*, *::after, *::before {
+    box-sizing: border-box;
+}
+
+body {
+    padding: 0px;
+}
+
+canvas#game-canvas {
+    width: 960px;
+    height: 540px;
+}
