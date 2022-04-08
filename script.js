@@ -411,17 +411,49 @@ class Player {
     }),
     standRight: new Sprite({
       img: imageStore.player,
-      framesCount: 1,
-      position: { x: 63, y: 30 },
-      offset: { x: 0, y: 0 },
+      framesCount: 3,
+      position: { x: 15, y: 4 * 48 + 30 },
+      offset: { x: 48, y: 0 },
       printOffset: { x: 0, y: 2 },
       dimensions: { width: 18, height: 18 },
     }),
     standLeft: new Sprite({
       img: imageStore.player,
+      framesCount: 3,
+      position: { x: 15, y: 5 * 48 + 30 },
+      offset: { x: 48, y: 0 },
+      printOffset: { x: 0, y: 2 },
+      dimensions: { width: 18, height: 18 },
+    }),
+    jumpRight: new Sprite({
+      img: imageStore.player,
       framesCount: 1,
-      position: { x: 63, y: 78 },
-      offset: { x: 0, y: 0 },
+      position: { x: 15, y: 6 * 48 + 30 },
+      offset: { x: 48, y: 0 },
+      printOffset: { x: 0, y: 2 },
+      dimensions: { width: 18, height: 18 },
+    }),
+    jumpLeft: new Sprite({
+      img: imageStore.player,
+      framesCount: 1,
+      position: { x: 15, y: 7 * 48 + 30 },
+      offset: { x: 48, y: 0 },
+      printOffset: { x: 0, y: 2 },
+      dimensions: { width: 18, height: 18 },
+    }),
+    fallRight: new Sprite({
+      img: imageStore.player,
+      framesCount: 1,
+      position: { x: 15+48, y: 6 * 48 + 30 },
+      offset: { x: 48, y: 0 },
+      printOffset: { x: 0, y: 2 },
+      dimensions: { width: 18, height: 18 },
+    }),
+    fallLeft: new Sprite({
+      img: imageStore.player,
+      framesCount: 1,
+      position: { x: 15+48, y: 7 * 48 + 30 },
+      offset: { x: 48, y: 0 },
       printOffset: { x: 0, y: 2 },
       dimensions: { width: 18, height: 18 },
     }),
@@ -446,17 +478,29 @@ class Player {
     if (!this.isAlive) return;
 
     switch (true) {
-      case this.direction === "right" && this.velocity.x === 0:
+      case this.direction === "right" && this.velocity.x === 0 && this.velocity.y === GRAVITY:
         this.sprite = this.sprites.standRight;
         break;
-      case this.direction === "right" && this.velocity.x !== 0:
+      case this.direction === "right" && this.velocity.x !== 0 && this.velocity.y === GRAVITY:
         this.sprite = this.sprites.runRight;
         break;
-      case this.direction === "left" && this.velocity.x === 0:
+      case this.direction === "left" && this.velocity.x === 0 && this.velocity.y === GRAVITY:
         this.sprite = this.sprites.standLeft;
         break;
-      case this.direction === "left" && this.velocity.x !== 0:
+      case this.direction === "left" && this.velocity.x !== 0 && this.velocity.y === GRAVITY:
         this.sprite = this.sprites.runLeft;
+        break;
+      case this.direction === "right" && this.velocity.y < GRAVITY:
+        this.sprite = this.sprites.jumpRight;
+        break;
+      case this.direction === "right" && this.velocity.y > GRAVITY:
+        this.sprite = this.sprites.fallRight;
+        break;
+      case this.direction === "left" && this.velocity.y < GRAVITY:
+        this.sprite = this.sprites.jumpLeft;
+        break;
+      case this.direction === "left" && this.velocity.y > GRAVITY:
+        this.sprite = this.sprites.fallLeft;
         break;
     }
 
