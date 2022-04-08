@@ -4,24 +4,29 @@ const ctx = canvas.getContext("2d");
 const GRAVITY = 1;
 
 const audioStore = {
-  backgroundMusic: loadAudio('./audio/background-music.mp3.ogg',0.2,true),
-  monsterStompEffect: loadAudio('./audio/monster-stomp.ogg',0.7),
-  monsterStompEffect2: loadAudio('./audio/monster-stomp.ogg',0.7),
+  backgroundMusic: loadAudio('./audio/background-music.mp3.ogg', 0.2, true),
+  loseMusic: loadAudio('./audio/lose.ogg', 1),
+  monsterStompEffect: loadAudio('./audio/monster-stomp.ogg', 0.7),
+  monsterStompEffect2: loadAudio('./audio/monster-stomp.ogg', 0.7),
   jumpEffect: loadAudio("./audio/jump.mp3.ogg")
 }
 
 const imageStore = {
   brownBlock: loadImage("./img/brown-wooden-block.png"),
-  redBlock: loadImage("./img/red-wooden-block.png"), 
-  blueBlock:  loadImage("./img/blue-wooden-block.png"), 
+  redBlock: loadImage("./img/red-wooden-block.png"),
+  blueBlock: loadImage("./img/blue-wooden-block.png"),
   floorBlock: loadImage("./img/floor-block.png"),
+  pipe: loadImage("./img/pipe.png"),
   player: loadImage("./img/player.png"),
   monsterKokoa: loadImage("./img/kokoa.png"),
   background: loadImage("./img/background.jpg"),
 }
 
-btnStart.addEventListener('click', () => { audioStore.backgroundMusic.play(); animate(); })
-document.addEventListener('keypress', ({key}) => { if (key==="Enter") { audioStore.backgroundMusic.play(); animate(); }}) 
+function startGame() {
+  btnStart.classList.add('hide');
+  audioStore.backgroundMusic.play();
+  animate();
+}
 
 function rectCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
   return x1 < x2 + w2 && x2 < x1 + w1 && y1 < y2 + h2 && y2 < y1 + h1;
@@ -54,7 +59,7 @@ class Platform {
     position,
     dimensions,
     color = "blue",
-    collisions = { vertical: false, horizontal: false },
+    collisions = { vertical: true, horizontal: true },
   }) {
     this.position = position;
     this.dimensions = dimensions;
@@ -64,8 +69,14 @@ class Platform {
       case color === "blue":
         this.img = imageStore.brownBlock
         break;
+      case color === "darkred":
+        this.img = imageStore.redBlock;
+        break;
       case color === "lightgreen":
         this.img = imageStore.floorBlock;
+        break;
+      case color === "green":
+        this.img = imageStore.pipe;
         break;
     }
   }
@@ -75,48 +86,55 @@ class Platform {
   }
 
   draw() {
-    if (this.img !== null) {
-      let x = 0;
-      while (this.img.width > 0 && x < this.dimensions.width) {
-        //only draw if the block is visible in the screen
-        if (
-          this.position.x + this.dimensions.width - scrollX + x > 0 &&
-          this.position.x - scrollX + x < canvas.width
-        ) {
-          ctx.drawImage(
-            this.img,
-            0,
-            0,
-            this.img.width,
-            this.img.height,
-            this.position.x - scrollX + x,
-            this.position.y,
-            this.img.width,
-            this.dimensions.height
-          );
+    if (
+      this.position.x + this.dimensions.width - scrollX > 0 &&
+      this.position.x - scrollX < canvas.width
+    ) { // only draw if platform is visible in the screen
+      if (this.img !== null && this.color !== 'green') {
+        let x = 0;
+        while (this.img.width > 0 && x < this.dimensions.width) {
+          let y = 0
+          while (this.img.width > 0 && y < this.dimensions.height) {
+            ctx.drawImage(
+              this.img,
+              0,
+              0,
+              this.img.width,
+              this.img.height,
+              this.position.x - scrollX + x,
+              this.position.y + y,
+              this.img.width,
+              this.img.height
+            );
+            y += this.img.height;
+          }
+          x += this.img.width;
         }
-        x += this.img.width;
+      } else if (this.color === "green") {
+        ctx.drawImage(
+          this.img,
+          0,
+          0,
+          this.img.width,
+          this.dimensions.height,
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
+      } else {
+        ctx.drawImage(
+          imageStore.brownBlock,
+          0,
+          0,
+          this.dimensions.width,
+          50,
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
       }
-    } else if (this.color !== "blue" || this.position.y > 400) {
-      ctx.fillStyle = this.color;
-      ctx.fillRect(
-        this.position.x - scrollX,
-        this.position.y,
-        this.dimensions.width,
-        this.dimensions.height
-      );
-    } else {
-      ctx.drawImage(
-        imageStore.brownBlock,
-        0,
-        0,
-        this.dimensions.width,
-        50,
-        this.position.x - scrollX,
-        this.position.y,
-        this.dimensions.width,
-        this.dimensions.height
-      );
     }
   }
 }
@@ -300,9 +318,9 @@ class Monster {
   }
 
   die(cb) {
-    if(audioStore.monsterStompEffect.paused) 
+    if (audioStore.monsterStompEffect.paused)
       audioStore.monsterStompEffect.play();
-    else 
+    else
       audioStore.monsterStompEffect2.play();
     this.isAlive = false;
     this.isDying = true;
@@ -567,6 +585,8 @@ class Player {
   }
 
   die(cb) {
+    audioStore.backgroundMusic.pause();
+    audioStore.loseMusic.play();
     this.isAlive = false;
     this.isDying = true;
     this.velocity.y = -20;
@@ -1057,4 +1077,6 @@ addEventListener("keyup", ({ key }) => {
   }
 });
 
+btnStart.addEventListener('click', () => startGame())
+addEventListener('keypress', ({ key }) => { if (key === 'Enter') startGame() }, { once: true })
 

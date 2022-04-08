@@ -2,17 +2,20 @@
     box-sizing: border-box;
 }
 
-body {
-    padding: 0px;
+html, body {
     display: flex;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     width: 100%;
-    height: 100vh
+    height: 100vh;
 }
 
 canvas#game-canvas {
     width: 960px;
     height: 540px;
+}
+
+.hide {
+    display: none;
 }
