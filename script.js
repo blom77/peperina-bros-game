@@ -2,6 +2,13 @@ const canvas = document.getElementById("game-canvas");
 const btnStart = document.getElementById("button-start");
 const ctx = canvas.getContext("2d");
 const GRAVITY = 1;
+const PLAYER_POWERS = {
+  NONE: 'none',
+  SUPER: 'super',
+  FIREBALL: 'fireball',
+  INVINCIBLE: 'invincible',
+  ONEUP: '1up',
+}
 
 const audioStore = {
   backgroundMusic: loadAudio('./audio/background-music.mp3.ogg', 0.2, true),
@@ -12,6 +19,8 @@ const audioStore = {
 }
 
 const imageStore = {
+  surpriseBlock: loadImage("./img/surprise-block.png"),
+  disabledBlock: loadImage("./img/disabled-block.png"),
   brownBlock: loadImage("./img/brown-wooden-block.png"),
   redBlock: loadImage("./img/red-wooden-block.png"),
   blueBlock: loadImage("./img/blue-wooden-block.png"),
@@ -47,26 +56,33 @@ function loadImage(src) {
   return img;
 }
 
+
 class Platform {
   position = { x: 0, y: 0 };
   velocity = { x: 0, y: 0 };
   dimensions = { width: 50, height: 100 };
   collisions = { vertical: false, horizontal: false };
-  color = "blue";
+  color = "lightbrown";
   img = null;
+  visible = true;
 
   constructor({
     position,
     dimensions,
-    color = "blue",
+    color = "lightbrown",
     collisions = { vertical: true, horizontal: true },
+    visible = true,
   }) {
     this.position = position;
+    this.maxY = position.y
     this.dimensions = dimensions;
     this.color = color;
     this.collisions = collisions;
+    this.visible = visible;
     switch (true) {
-      case color === "blue":
+      case color === "lightbrown":
+      case color === "multicoin":
+      case color === "starhidden":
         this.img = imageStore.brownBlock
         break;
       case color === "darkred":
@@ -78,14 +94,100 @@ class Platform {
       case color === "green":
         this.img = imageStore.pipe;
         break;
+      case color === "powerup":
+      case color === "coin":
+      case color === "1up":
+      case color === "star":
+        this.img = imageStore.surpriseBlock
+        break;
+      case color === "disabled":
+        this.img = imageStore.disabledBlock
+        break;
+    }
+  }
+
+  hitByPlayer(powers, from = 'bottom') {
+    if (!this.visible) {
+      this.visible = true;
+    }
+
+    if (this.color === 'disabled') return;
+
+    if (from === 'bottom') {
+      if (this.color === 'coin' || this.color === 'powerup' || this.color === '1up' || this.color === 'starhidden' || this.color === 'star') {
+        // if coin - add coin to count, play sound and animate coin sprite
+        // if powerup - check player powers and deternmine type of power up, based on that create power up on top of platform and add to power up array, play sound
+        if (this.color === 'powerup') {
+          switch (powers) {
+            case PLAYER_POWERS.SUPER:
+              powerUps.push(new PowerUp({
+                position: { x: this.position.x, y: this.position.y - 50 },
+                dimensions: { width: 50, height: 50 },
+                type: PLAYER_POWERS.FIREBALL,
+                velocity: { x: 0, y: 0 }
+              }));
+              break;
+            case PLAYER_POWERS.NONE:
+              powerUps.push(new PowerUp({
+                position: { x: this.position.x, y: this.position.y - 50 },
+                dimensions: { width: 50, height: 50 },
+                type: PLAYER_POWERS.SUPER,
+                velocity: { x: 3, y: 0 }
+              }));
+              break;
+          }
+        } else if (this.color === '1up') {
+          powerUps.push(new PowerUp({
+            position: { x: this.position.x, y: this.position.y - 50 },
+            dimensions: { width: 50, height: 50 },
+            type: PLAYER_POWERS.ONEUP,
+            velocity: { x: 3, y: 0 }
+          }));
+        } else if (this.color === 'star' || this.color === 'starhidden') {
+          powerUps.push(new PowerUp({
+            position: { x: this.position.x, y: this.position.y - 50 },
+            dimensions: { width: 50, height: 50 },
+            type: PLAYER_POWERS.INVINCIBLE,
+            velocity: { x: 3, y: 10 }
+          }));
+        }
+        // if 1up - create 1up on top of platform and add to powerup array, play sound
+        // if star or starhidden - create 1up on top of platform and add to powerup array, play sound
+        this.color = 'disabled'
+        this.img = imageStore.disabledBlock;
+      }
+      if (this.color === 'multicoin') {
+        // if multicoin - add coint to count, play sound, animate coin sprite, set timer to disable
+        setTimeout(() => {
+          this.color = 'disabled'
+          this.img = imageStore.disabledBlock;
+        }, 3000);
+      }
+      this.velocity.y = -5
+      for (let i = 0; i < monsters.length; i++) {
+        const monster = monsters[i];
+        if (rectCollision(this.position.x, this.position.y - 5, this.dimensions.width, this.dimensions.height,
+          monster.position.x, monster.position.y, monster.dimensions.width, monster.dimensions.height)) {
+          monster.die(() => monsters.splice(i, 1))
+          break;
+        }
+      }
     }
   }
 
   update() {
+    this.velocity.y += GRAVITY
+    this.position.y += this.velocity.y;
+    if (this.position.y >= this.maxY) {
+      this.velocity.y = 0;
+      this.position.y = this.maxY;
+    }
     this.draw();
   }
 
   draw() {
+    if (!this.visible) return;
+
     if (
       this.position.x + this.dimensions.width - scrollX > 0 &&
       this.position.x - scrollX < canvas.width
@@ -218,6 +320,7 @@ class Monster {
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
       if (
+        platform.visible &&
         this.position.y + this.dimensions.height <= platform.position.y &&
         this.position.y + this.dimensions.height + this.velocity.y >=
         platform.position.y &&
@@ -385,82 +488,85 @@ class Sprite {
 }
 
 class Player {
-  position = { x: 100, y: 425 };
-  velocity = { x: 0, y: 0 };
-  dimensions = { width: 50, height: 50 };
-  direction = "right";
-  isJumping = true;
-  isAlive = true;
-  isDiying = false;
-  sprites = {
-    runRight: new Sprite({
-      img: imageStore.player,
-      framesCount: 3,
-      position: { x: 15, y: 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    runLeft: new Sprite({
-      img: imageStore.player,
-      framesCount: 3,
-      position: { x: 15, y: 78 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    standRight: new Sprite({
-      img: imageStore.player,
-      framesCount: 3,
-      position: { x: 15, y: 4 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    standLeft: new Sprite({
-      img: imageStore.player,
-      framesCount: 3,
-      position: { x: 15, y: 5 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    jumpRight: new Sprite({
-      img: imageStore.player,
-      framesCount: 1,
-      position: { x: 15, y: 6 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    jumpLeft: new Sprite({
-      img: imageStore.player,
-      framesCount: 1,
-      position: { x: 15, y: 7 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    fallRight: new Sprite({
-      img: imageStore.player,
-      framesCount: 1,
-      position: { x: 15+48, y: 6 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-    fallLeft: new Sprite({
-      img: imageStore.player,
-      framesCount: 1,
-      position: { x: 15+48, y: 7 * 48 + 30 },
-      offset: { x: 48, y: 0 },
-      printOffset: { x: 0, y: 2 },
-      dimensions: { width: 18, height: 18 },
-    }),
-  };
-  sprite = this.sprites.standRight;
+  constructor() {
+    this.position = { x: 100, y: 425 };
+    this.velocity = { x: 0, y: 0 };
+    this.dimensions = { width: 40, height: 40 };
+    this.direction = "right";
+    this.isJumping = true;
+    this.isAlive = true;
+    this.isDiying = false;
+    this.powers = PLAYER_POWERS.NONE;
+    this.sprites = {
+      runRight: new Sprite({
+        img: imageStore.player,
+        framesCount: 3,
+        position: { x: 15, y: 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      runLeft: new Sprite({
+        img: imageStore.player,
+        framesCount: 3,
+        position: { x: 15, y: 78 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      standRight: new Sprite({
+        img: imageStore.player,
+        framesCount: 3,
+        position: { x: 15, y: 4 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      standLeft: new Sprite({
+        img: imageStore.player,
+        framesCount: 3,
+        position: { x: 15, y: 5 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      jumpRight: new Sprite({
+        img: imageStore.player,
+        framesCount: 1,
+        position: { x: 15, y: 6 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      jumpLeft: new Sprite({
+        img: imageStore.player,
+        framesCount: 1,
+        position: { x: 15, y: 7 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      fallRight: new Sprite({
+        img: imageStore.player,
+        framesCount: 1,
+        position: { x: 15 + 48, y: 6 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+      fallLeft: new Sprite({
+        img: imageStore.player,
+        framesCount: 1,
+        position: { x: 15 + 48, y: 7 * 48 + 30 },
+        offset: { x: 48, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 18, height: 18 },
+      }),
+    };
+    this.sprite = this.sprites.standRight;
+    this.poweringDown = false
 
-  constructor() { }
+  }
 
   jump() {
     this.isJumping = true;
@@ -510,6 +616,8 @@ class Player {
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
       if (
+        this.velocity.y > 0 &&
+        platform.visible &&
         this.position.y + this.dimensions.height <= platform.position.y &&
         this.position.y + this.dimensions.height + this.velocity.y >=
         platform.position.y &&
@@ -529,6 +637,7 @@ class Player {
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
       if (
+        this.velocity.y < 0 &&
         platform.collisions.vertical &&
         rectCollision(
           this.position.x,
@@ -545,7 +654,12 @@ class Player {
           this.position.y = platform.position.y + platform.dimensions.height;
           //hit platform from bottom
           //to manage here what to do with hit platforms,
-          //for instance delete them with explosion animation: platforms.splice(i,1);
+          //for instance delete them with explosion animation: 
+          //if powers, destroy the block
+          //if no powers, just move the block
+          platform.hitByPlayer(this.powers, 'bottom');
+          if(this.powers!==PLAYER_POWERS.NONE&& platform.color === "lightbrown")
+            platforms.splice(i,1);
         }
         this.velocity.y = 0;
         break;
@@ -600,11 +714,66 @@ class Player {
           monster.die(() => monsters.splice(i, 1));
           this.velocity.y = -10;
         } else {
-          this.die(() => {
-            alert("you lose!");
-            location.reload(false);
-          });
+          if (this.powers === PLAYER_POWERS.NONE) {
+            this.die(() => {
+              alert("you lose!");
+              location.reload(false);
+            });
+          } else {
+            //play powerdown sound effect
+            this.poweringDown = true;
+            this.dimensions.width = 40;
+            this.dimensions.height = 40;
+            //sprite for powering down here
+            setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false },2000);
+          }
         }
+        break;
+      }
+    }
+
+    // check collissions with powerups
+    for (let i = 0; i < powerUps.length; i++) {
+      const powerUp = powerUps[i];
+      if (
+        rectCollision(
+          this.position.x + this.velocity.x,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          powerUp.position.x,
+          powerUp.position.y,
+          powerUp.dimensions.width,
+          powerUp.dimensions.height
+        )
+      ) {
+        switch (powerUp.type) {
+          case PLAYER_POWERS.SUPER:
+            if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.NONE) {
+              this.powers = PLAYER_POWERS.SUPER
+              this.position.y = this.position.y - 50 + this.dimensions.height;
+              this.position.x = this.position.x - 50 + this.dimensions.width;
+              this.dimensions.height = 50
+              this.dimensions.width = 50
+            }
+            audioStore.monsterStompEffect.play();
+            break;
+          case PLAYER_POWERS.FIREBALL:
+            if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.FIREBALL) {
+              this.powers = PLAYER_POWERS.FIREBALL
+              this.position.y = this.position.y - 50 + this.dimensions.height;
+              this.position.x = this.position.x - 50 + this.dimensions.width;
+              this.dimensions.height = 50
+              this.dimensions.width = 50
+            }
+            audioStore.jumpEffect.play();
+            break;
+          case PLAYER_POWERS.ONEUP:
+            audioStore.jumpEffect.play();
+            //play powerup audio effect
+            break;
+        }
+        powerUps.splice(i, 1);
         break;
       }
     }
@@ -638,6 +807,29 @@ class Player {
   }
 }
 
+function createPlatformBlocks({ position, dimensions, color, collisions, blockWidth = undefined, blockHeight = undefined }) {
+  const platformBlocks = [];
+  if (blockWidth == undefined) blockWidth = dimensions.width;
+  if (blockHeight == undefined) blockHeight = dimensions.height;
+  let x = 0;
+  while (x < dimensions.width) {
+    let y = 0;
+    while (y < dimensions.height) {
+      platformBlocks.push(new Platform({
+        position: { x: position.x + x, y: position.y + y },
+        dimensions: { width: blockWidth, height: blockHeight },
+        color: color,
+        collisions: collisions
+      }));
+      y += blockHeight;
+    }
+    x += blockWidth;
+  }
+
+  return platformBlocks;
+
+}
+
 const player = new Player();
 const platforms = [
   new Platform({
@@ -649,17 +841,42 @@ const platforms = [
     position: { x: 350, y: 300 },
     dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
+    color: 'coin'
   }),
   new Platform({
     position: { x: 650, y: 100 },
     dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
+    color: 'coin'
   }),
   new Platform({
     position: { x: 550, y: 300 },
-    dimensions: { width: 250, height: 50 },
+    dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
   }),
+  new Platform({
+    position: { x: 600, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+    color: 'powerup'
+  }),
+  new Platform({
+    position: { x: 650, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+  }),
+  new Platform({
+    position: { x: 700, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+    color: 'coin'
+  }),
+  new Platform({
+    position: { x: 750, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+  }),
+
   new Platform({
     position: { x: 900, y: 400 },
     dimensions: { width: 80, height: 100 },
@@ -685,15 +902,32 @@ const platforms = [
     collisions: { horizontal: true, vertical: false },
   }),
   new Platform({
+    position: { x: 2000 + 7 * 50, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    color: "1up",
+    collisions: { horizontal: true, vertical: true },
+    visible: false
+  }),
+  new Platform({
     position: { x: 2650, y: 500 },
     dimensions: { width: 15 * 50, height: 50 },
     color: "lightgreen",
   }),
   new Platform({
     position: { x: 2950, y: 300 },
-    dimensions: { width: 3 * 50, height: 50 },
+    dimensions: { width: 50, height: 50 },
   }),
   new Platform({
+    position: { x: 3000, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    color: 'powerup'
+  }),
+  new Platform({
+    position: { x: 3050, y: 300 },
+    dimensions: { width: 50, height: 50 },
+  }),
+  ...createPlatformBlocks({
+    blockWidth: 50,
     position: { x: 3100, y: 100 },
     dimensions: { width: 8 * 50, height: 50 },
   }),
@@ -702,44 +936,77 @@ const platforms = [
     dimensions: { width: 3550, height: 50 },
     color: "lightgreen",
   }),
-  new Platform({
+  ...createPlatformBlocks({
+    blockWidth: 50,
     position: { x: 2650 + 20 * 50, y: 100 },
-    dimensions: { width: 4 * 50, height: 50 },
+    dimensions: { width: 3 * 50, height: 50 },
+  }),
+  new Platform({
+    position: { x: 2650 + 23 * 50, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    color: 'multicoin'
+  }),
+  new Platform({
+    position: { x: 2650 + 23 * 50, y: 100 },
+    dimensions: { width: 50, height: 50 },
+    color: 'coin'
   }),
   new Platform({
     position: { x: 2650 + 28 * 50, y: 300 },
-    dimensions: { width: 2 * 50, height: 50 },
+    dimensions: { width: 50, height: 50 },
+  }),
+  new Platform({
+    position: { x: 2650 + 29 * 50, y: 300 },
+    dimensions: { width: 50, height: 50 },
+    color: 'starhidden'
   }),
   new Platform({
     position: { x: 2650 + 34 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
+    color: 'coin'
   }),
   new Platform({
     position: { x: 2650 + 37 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
+    color: 'coin'
   }),
-  new Platform({
+  ...createPlatformBlocks({
+    blockWidth: 50,
     position: { x: 2650 + 37 * 50, y: 100 },
     dimensions: { width: 1 * 50, height: 50 },
+    color: 'powerup'
   }),
   new Platform({
     position: { x: 2650 + 40 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
+    color: 'coin'
   }),
   new Platform({
     position: { x: 2650 + 46 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
   }),
-  new Platform({
+  ...createPlatformBlocks({
+    blockWidth: 50,
     position: { x: 2650 + 49 * 50, y: 100 },
     dimensions: { width: 3 * 50, height: 50 },
   }),
   new Platform({
     position: { x: 2650 + 56 * 50, y: 100 },
-    dimensions: { width: 4 * 50, height: 50 },
+    dimensions: { width: 50, height: 50 },
+  }),
+  ...createPlatformBlocks({
+    blockWidth: 50,
+    position: { x: 2650 + 57 * 50, y: 100 },
+    dimensions: { width: 2 * 50, height: 50 },
+    color: 'coin'
   }),
   new Platform({
-    position: { x: 2650 + 57 * 50, y: 100 },
+    position: { x: 2650 + 59 * 50, y: 100 },
+    dimensions: { width: 50, height: 50 },
+  }),
+  ...createPlatformBlocks({
+    blockWidth: 50,
+    position: { x: 2650 + 57 * 50, y: 300 },
     dimensions: { width: 2 * 50, height: 50 },
   }),
   new Platform({
@@ -857,7 +1124,19 @@ const platforms = [
   }),
   new Platform({
     position: { x: 2650 + 72 * 50 + 25 * 50, y: 300 },
-    dimensions: { width: 4 * 50, height: 50 },
+    dimensions: { width: 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+  }),
+  ...createPlatformBlocks({
+    blockWidth: 50,
+    position: { x: 2650 + 73 * 50 + 25 * 50, y: 300 },
+    dimensions: { width: 2 * 50, height: 50 },
+    collisions: { horizontal: true, vertical: true },
+    color: 'coin'
+  }),
+  new Platform({
+    position: { x: 2650 + 75 * 50 + 25 * 50, y: 300 },
+    dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
   }),
   new Platform({
@@ -921,6 +1200,9 @@ const platforms = [
     collisions: { horizontal: true, vertical: false },
   }),
 ];
+
+const powerUps = [];
+
 const monsters = [
   new Monster({
     position: { x: 700, y: 439 },
@@ -1042,6 +1324,7 @@ function animate() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   platforms.forEach((platform) => platform.update());
+  powerUps.forEach((powerUp) => powerUp.update());
   player.update();
   monsters.forEach((monster) => monster.update());
 
@@ -1124,3 +1407,140 @@ addEventListener("keyup", ({ key }) => {
 btnStart.addEventListener('click', () => startGame())
 addEventListener('keypress', ({ key }) => { if (key === 'Enter') startGame() }, { once: true })
 
+
+
+
+class PowerUp {
+  position = { x: 30, y: 0 };
+  velocity = { x: 0, y: 0 };
+  dimensions = { width: 40, height: 40 };
+  type = "powerup"; // 1up, star, ... 
+  isJumping = true;
+  isActivated = false;
+
+  sprites = {};
+  sprite = null
+
+  constructor({
+    position,
+    dimensions,
+    type = "powerup",
+    velocity = { x: 3, y: 0 },
+  }) {
+    this.position = position;
+    this.dimensions = dimensions;
+    this.velocity = velocity;
+    this.type = type;
+  }
+
+  update() {
+
+    if (this.sprite !== null) this.sprite.nextFrame(1);
+
+    // check collisions with platforms from top to down
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.visible &&
+        this.position.y + this.dimensions.height <= platform.position.y &&
+        this.position.y + this.dimensions.height + this.velocity.y >=
+        platform.position.y &&
+        this.position.x + this.velocity.x <
+        platform.position.x + platform.dimensions.width &&
+        this.position.x + this.dimensions.width + this.velocity.x >
+        platform.position.x
+      ) {
+        this.position.y = platform.position.y - this.dimensions.height;
+        this.velocity.y = 0;
+        this.isJumping = false;
+        break;
+      }
+    }
+
+    // check collisions with platforms from bottom to top
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.collisions.vertical &&
+        rectCollision(
+          this.position.x,
+          this.position.y + this.velocity.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          platform.position.x,
+          platform.position.y,
+          platform.dimensions.width,
+          platform.dimensions.height
+        )
+      ) {
+        if (this.position.y > platform.position.y) {
+          this.position.y = platform.position.y + platform.dimensions.height;
+        }
+        this.velocity.y = 0;
+        break;
+      }
+    }
+
+    this.position.y += this.velocity.y;
+    this.velocity.y += GRAVITY;
+
+    // check collissions with platforms horizontally
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.collisions.horizontal &&
+        rectCollision(
+          this.position.x + this.velocity.x,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          platform.position.x,
+          platform.position.y,
+          platform.dimensions.width,
+          platform.dimensions.height
+        )
+      ) {
+        this.velocity.x = -this.velocity.x;
+        break;
+      }
+    }
+
+    // check move beyond start of map
+    if (this.position.x + this.velocity.x < 0) {
+      this.velocity.x = -this.velocity.x;
+    }
+
+    this.position.x += this.velocity.x;
+
+    this.draw();
+  }
+
+  draw() {
+    //draw only if it is in canvas window
+    if (
+      this.position.x + this.dimensions.width - scrollX > 0 &&
+      this.position.x - scrollX < canvas.width
+    ) {
+      if (this.sprite == null) {
+        switch (this.type) {
+          case PLAYER_POWERS.SUPER: ctx.fillStyle = "yellow"; break;
+          case PLAYER_POWERS.FIREBALL: ctx.fillStyle = "red"; break;
+          case PLAYER_POWERS.INVINCIBLE: ctx.fillStyle = "gold"; break;
+          case PLAYER_POWERS.ONEUP: ctx.fillStyle = "lightgreen"; break;
+          default: ctx.fillStyle = "blue"; break;
+        }
+        ctx.fillRect(
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
+      } else {
+        this.sprite.draw({
+          position: this.position,
+          dimensions: this.dimensions,
+        });
+      }
+    }
+  }
+}
