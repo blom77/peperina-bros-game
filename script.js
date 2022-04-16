@@ -15,7 +15,11 @@ const audioStore = {
   loseMusic: loadAudio('./audio/lose.ogg', 1),
   monsterStompEffect: loadAudio('./audio/monster-stomp.ogg', 0.7),
   monsterStompEffect2: loadAudio('./audio/monster-stomp.ogg', 0.7),
-  jumpEffect: loadAudio("./audio/jump.mp3.ogg")
+  jumpEffect: loadAudio("./audio/jump.mp3.ogg"),
+  fireEffect: loadAudio('./audio/shoot.ogg', 1),
+  powerUpEffect: loadAudio('./audio/power-up.mp3', 1),
+  powerUpAppliedEffect: loadAudio('./audio/power-up-applied2.mp3', 0.7),
+  oneLiveUpEffect: loadAudio('./audio/one-live-up.mp3', 1),
 }
 
 const imageStore = {
@@ -48,6 +52,14 @@ function loadAudio(src, volume = 0.3
   audio.loop = loop;
   audio.src = src;
   return audio;
+}
+
+function playAudio(audio) {
+  if (!audio.paused) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+  audio.play();
 }
 
 function loadImage(src) {
@@ -120,12 +132,14 @@ class Platform {
         if (this.color === 'powerup') {
           switch (powers) {
             case PLAYER_POWERS.SUPER:
+            case PLAYER_POWERS.FIREBALL:
               powerUps.push(new PowerUp({
                 position: { x: this.position.x, y: this.position.y - 50 },
                 dimensions: { width: 50, height: 50 },
                 type: PLAYER_POWERS.FIREBALL,
                 velocity: { x: 0, y: 0 }
               }));
+              playAudio(audioStore.powerUpEffect);
               break;
             case PLAYER_POWERS.NONE:
               powerUps.push(new PowerUp({
@@ -134,6 +148,7 @@ class Platform {
                 type: PLAYER_POWERS.SUPER,
                 velocity: { x: 3, y: 0 }
               }));
+              playAudio(audioStore.powerUpEffect);
               break;
           }
         } else if (this.color === '1up') {
@@ -143,13 +158,15 @@ class Platform {
             type: PLAYER_POWERS.ONEUP,
             velocity: { x: 3, y: 0 }
           }));
+          playAudio(audioStore.powerUpEffect);
         } else if (this.color === 'star' || this.color === 'starhidden') {
           powerUps.push(new PowerUp({
             position: { x: this.position.x, y: this.position.y - 50 },
             dimensions: { width: 50, height: 50 },
             type: PLAYER_POWERS.INVINCIBLE,
-            velocity: { x: 3, y: 10 }
+            velocity: { x: 3, y: -14 }
           }));
+          playAudio(audioStore.powerUpEffect);
         }
         // if 1up - create 1up on top of platform and add to powerup array, play sound
         // if star or starhidden - create 1up on top of platform and add to powerup array, play sound
@@ -168,7 +185,7 @@ class Platform {
         const monster = monsters[i];
         if (rectCollision(this.position.x, this.position.y - 5, this.dimensions.width, this.dimensions.height,
           monster.position.x, monster.position.y, monster.dimensions.width, monster.dimensions.height)) {
-          monster.die(() => monsters.splice(i, 1))
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1))
           break;
         }
       }
@@ -421,10 +438,7 @@ class Monster {
   }
 
   die(cb) {
-    if (audioStore.monsterStompEffect.paused)
-      audioStore.monsterStompEffect.play();
-    else
-      audioStore.monsterStompEffect2.play();
+    playAudio(audioStore.monsterStompEffect);
     this.isAlive = false;
     this.isDying = true;
     this.position.x -= 5;
@@ -492,11 +506,14 @@ class Player {
     this.position = { x: 100, y: 425 };
     this.velocity = { x: 0, y: 0 };
     this.dimensions = { width: 40, height: 40 };
+    this.resizeDimensions = { ...this.dimensions };
     this.direction = "right";
     this.isJumping = true;
     this.isAlive = true;
+    this.coolingDown = false;
     this.isDiying = false;
     this.powers = PLAYER_POWERS.NONE;
+    this.isInvincible = false
     this.sprites = {
       runRight: new Sprite({
         img: imageStore.player,
@@ -571,7 +588,30 @@ class Player {
   jump() {
     this.isJumping = true;
     this.velocity.y = -22;
-    audioStore.jumpEffect.play();
+    playAudio(audioStore.jumpEffect);
+  }
+
+  fire() {
+    if (this.powers === PLAYER_POWERS.FIREBALL && !this.coolingDown) {
+      if (this.direction === 'right') {
+        fireballs.push(new FireBall({
+          position: { x: this.position.x + this.dimensions.width, y: this.position.y + this.dimensions.height / 3 },
+          dimensions: { width: 6, height: 6 },
+          velocity: { x: 13, y: 3 }
+        }));
+      } else {
+        fireballs.push(new FireBall({
+          position: { x: this.position.x, y: this.position.y + this.dimensions.height / 3 },
+          dimensions: { width: 6, height: 6 },
+          velocity: { x: -13, y: 3 }
+        }));
+      }
+      playAudio(audioStore.fireEffect)
+      this.coolingDown = true;
+      setTimeout(() => {
+        this.coolingDown = false;
+      }, 100);
+    }
   }
 
   update() {
@@ -611,6 +651,25 @@ class Player {
     }
 
     this.sprite.nextFrame(speedBooster);
+
+    // resize height if needed
+    if (this.dimensions.height < this.resizeDimensions.height) {
+      this.dimensions.height += 1;
+      this.position.y -= 1;
+    } else if (this.dimensions.height > this.resizeDimensions.height) {
+      this.dimensions.height -= 1;
+      this.position.y += 1;
+    }
+
+    // resize width if needed
+    if (this.dimensions.width < this.resizeDimensions.width) {
+      this.dimensions.width += 1;
+      this.position.x -= 1;
+    } else if (this.dimensions.width > this.resizeDimensions.width) {
+      this.dimensions.width -= 1;
+      this.position.x += 1;
+    }
+
 
     // check collisions with platforms from top to down
     for (let i = 0; i < platforms.length; i++) {
@@ -658,8 +717,8 @@ class Player {
           //if powers, destroy the block
           //if no powers, just move the block
           platform.hitByPlayer(this.powers, 'bottom');
-          if(this.powers!==PLAYER_POWERS.NONE&& platform.color === "lightbrown")
-            platforms.splice(i,1);
+          if (this.powers !== PLAYER_POWERS.NONE && platform.color === "lightbrown")
+            platforms.splice(i, 1);
         }
         this.velocity.y = 0;
         break;
@@ -711,10 +770,13 @@ class Player {
           monster.position.y + monster.dimensions.height / 2 &&
           this.velocity.y > 0
         ) {
-          monster.die(() => monsters.splice(i, 1));
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
           this.velocity.y = -10;
         } else {
-          if (this.powers === PLAYER_POWERS.NONE) {
+          if (this.isInvincible) {
+            monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+          }
+          else if (this.powers === PLAYER_POWERS.NONE) {
             this.die(() => {
               alert("you lose!");
               location.reload(false);
@@ -722,10 +784,9 @@ class Player {
           } else {
             //play powerdown sound effect
             this.poweringDown = true;
-            this.dimensions.width = 40;
-            this.dimensions.height = 40;
+            this.resizeDimensions = { width: 40, height: 40 }
             //sprite for powering down here
-            setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false },2000);
+            setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false }, 2000);
           }
         }
         break;
@@ -749,27 +810,28 @@ class Player {
       ) {
         switch (powerUp.type) {
           case PLAYER_POWERS.SUPER:
-            if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.NONE) {
+            if (this.powers === PLAYER_POWERS.NONE) {
               this.powers = PLAYER_POWERS.SUPER
-              this.position.y = this.position.y - 50 + this.dimensions.height;
-              this.position.x = this.position.x - 50 + this.dimensions.width;
-              this.dimensions.height = 50
-              this.dimensions.width = 50
+              this.resizeDimensions = { width: 50, height: 50 }
             }
-            audioStore.monsterStompEffect.play();
+            playAudio(audioStore.powerUpAppliedEffect);
             break;
           case PLAYER_POWERS.FIREBALL:
-            if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.FIREBALL) {
+            if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.SUPER) {
               this.powers = PLAYER_POWERS.FIREBALL
-              this.position.y = this.position.y - 50 + this.dimensions.height;
-              this.position.x = this.position.x - 50 + this.dimensions.width;
-              this.dimensions.height = 50
-              this.dimensions.width = 50
+              this.resizeDimensions = { width: 50, height: 50 }
             }
-            audioStore.jumpEffect.play();
+            playAudio(audioStore.powerUpAppliedEffect);
+            break;
+          case PLAYER_POWERS.INVINCIBLE:
+            playAudio(audioStore.powerUpAppliedEffect);
+            this.isInvincible = true;
+            setTimeout(() => {
+              this.isInvincible = false;
+            }, 7000);
             break;
           case PLAYER_POWERS.ONEUP:
-            audioStore.jumpEffect.play();
+            playAudio(audioStore.oneLiveUpEffect);
             //play powerup audio effect
             break;
         }
@@ -795,6 +857,25 @@ class Player {
         dimensions: this.dimensions,
       });
     }
+
+    if (this.isInvincible) {
+      ctx.fillStyle = 'orange'
+    } else {
+      switch (this.powers) {
+        case PLAYER_POWERS.NONE:
+          ctx.fillStyle = 'transparent'
+          break;
+        case PLAYER_POWERS.SUPER:
+          ctx.fillStyle = 'yellow'
+          break;
+        case PLAYER_POWERS.FIREBALL:
+          ctx.fillStyle = 'red'
+          break;
+      }
+    }
+
+    ctx.fillRect(this.position.x - scrollX, this.position.y, 10, 10)
+
   }
 
   die(cb) {
@@ -1203,6 +1284,8 @@ const platforms = [
 
 const powerUps = [];
 
+const fireballs = [];
+
 const monsters = [
   new Monster({
     position: { x: 700, y: 439 },
@@ -1326,6 +1409,7 @@ function animate() {
   platforms.forEach((platform) => platform.update());
   powerUps.forEach((powerUp) => powerUp.update());
   player.update();
+  fireballs.forEach((fireball) => fireball.update());
   monsters.forEach((monster) => monster.update());
 
   //adjust scroll right side
@@ -1384,6 +1468,9 @@ addEventListener("keydown", ({ key }) => {
         player.velocity.x = -5 * speedBooster;
       }
       break;
+    case ' ':
+      player.fire();
+      break;
   }
 });
 
@@ -1408,8 +1495,6 @@ btnStart.addEventListener('click', () => startGame())
 addEventListener('keypress', ({ key }) => { if (key === 'Enter') startGame() }, { once: true })
 
 
-
-
 class PowerUp {
   position = { x: 30, y: 0 };
   velocity = { x: 0, y: 0 };
@@ -1430,6 +1515,7 @@ class PowerUp {
     this.position = position;
     this.dimensions = dimensions;
     this.velocity = velocity;
+    this.bounceVelocity = velocity.y;
     this.type = type;
   }
 
@@ -1451,8 +1537,7 @@ class PowerUp {
         platform.position.x
       ) {
         this.position.y = platform.position.y - this.dimensions.height;
-        this.velocity.y = 0;
-        this.isJumping = false;
+        this.velocity.y = this.bounceVelocity;
         break;
       }
     }
@@ -1529,6 +1614,161 @@ class PowerUp {
           case PLAYER_POWERS.ONEUP: ctx.fillStyle = "lightgreen"; break;
           default: ctx.fillStyle = "blue"; break;
         }
+        ctx.fillRect(
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
+      } else {
+        this.sprite.draw({
+          position: this.position,
+          dimensions: this.dimensions,
+        });
+      }
+    }
+  }
+}
+
+class FireBall {
+  position = { x: 30, y: 0 };
+  velocity = { x: 0, y: 0 };
+  dimensions = { width: 5, height: 5 };
+  isJumping = true;
+
+  sprites = {};
+  sprite = null
+
+  constructor({
+    position,
+    dimensions,
+    velocity = { x: 5, y: 5 },
+  }) {
+    this.position = position;
+    this.dimensions = dimensions;
+    this.velocity = velocity;
+    this.bounceVelocity = -Math.abs(velocity.y*3);
+  }
+
+  update() {
+
+    if (this.sprite !== null) this.sprite.nextFrame(1);
+
+    // check collisions with platforms from top to down
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.visible &&
+        this.position.y + this.dimensions.height <= platform.position.y &&
+        this.position.y + this.dimensions.height + this.velocity.y >=
+        platform.position.y &&
+        this.position.x + this.velocity.x <
+        platform.position.x + platform.dimensions.width &&
+        this.position.x + this.dimensions.width + this.velocity.x >
+        platform.position.x
+      ) {
+        this.position.y = platform.position.y - this.dimensions.height;
+        this.velocity.y = this.bounceVelocity;
+        break;
+      }
+    }
+
+    // check collisions with platforms from bottom to top
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.collisions.vertical &&
+        rectCollision(
+          this.position.x,
+          this.position.y + this.velocity.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          platform.position.x,
+          platform.position.y,
+          platform.dimensions.width,
+          platform.dimensions.height
+        )
+      ) {
+        if (this.position.y > platform.position.y) {
+          this.position.y = platform.position.y + platform.dimensions.height;
+        }
+        this.velocity.y = 0;
+        break;
+      }
+    }
+
+    this.position.y += this.velocity.y;
+    this.velocity.y += GRAVITY;
+
+    // check colission with monsters
+    for (let i = 0; i < monsters.length; i++) {
+      const monster = monsters[i];
+      if (
+        monster.isAlive &&
+        rectCollision(
+          this.position.x + this.velocity.x,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          monster.position.x,
+          monster.position.y,
+          monster.dimensions.width,
+          monster.dimensions.height
+        )
+      ) {
+        monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+        fireballs.splice(fireballs.indexOf(this), 1);
+        return;
+      }
+    }
+
+    // check collissions with platforms horizontally
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      if (
+        platform.collisions.horizontal &&
+        rectCollision(
+          this.position.x + this.velocity.x,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height,
+          platform.position.x,
+          platform.position.y,
+          platform.dimensions.width,
+          platform.dimensions.height
+        )
+      ) {
+        fireballs.splice(fireballs.indexOf(this), 1);
+        return;
+      }
+    }
+
+    // check move beyond start of map
+    if (this.position.x + this.velocity.x < 0) {
+      fireballs.splice(fireballs.indexOf(this), 1);
+      return;
+    }
+
+    // check move beyond bottom of canvas
+    if (this.position.y + this.velocity.y > canvas.height) {
+      fireballs.splice(fireballs.indexOf(this), 1);
+      return;
+    }
+
+
+    this.position.x += this.velocity.x;
+
+    this.draw();
+  }
+
+  draw() {
+    //draw only if it is in canvas window
+    if (
+      this.position.x + this.dimensions.width - scrollX > 0 &&
+      this.position.x - scrollX < canvas.width
+    ) {
+      if (this.sprite == null) {
+        ctx.fillStyle = "red"
         ctx.fillRect(
           this.position.x - scrollX,
           this.position.y,
