@@ -20,6 +20,7 @@ const audioStore = {
   powerUpEffect: loadAudio('./audio/power-up.mp3', 1),
   powerUpAppliedEffect: loadAudio('./audio/power-up-applied2.mp3', 0.7),
   oneLiveUpEffect: loadAudio('./audio/one-live-up.mp3', 1),
+  fireballHitBlockEffect: loadAudio('./audio/shoot.ogg', 1),
 }
 
 const imageStore = {
@@ -33,6 +34,7 @@ const imageStore = {
   player: loadImage("./img/player.png"),
   monsterKokoa: loadImage("./img/kokoa.png"),
   background: loadImage("./img/background.jpg"),
+  powerUp: loadImage("./img/power-up.png"),
 }
 
 function startGame() {
@@ -137,7 +139,17 @@ class Platform {
                 position: { x: this.position.x, y: this.position.y - 50 },
                 dimensions: { width: 50, height: 50 },
                 type: PLAYER_POWERS.FIREBALL,
-                velocity: { x: 0, y: 0 }
+                velocity: { x: 0, y: 0 },
+                sprite: new Sprite({
+                  img: imageStore.powerUp,
+                  framesCount: 3,
+                  position: { x: 0, y: 50 },
+                  offset: { x: 50, y: 0 },
+                  printOffset: { x: 0, y: 0 },
+                  dimensions: { width: 50, height: 50 },
+                  framesRefreshFrequency: 6,
+                }),
+                activationFrames: 30,
               }));
               playAudio(audioStore.powerUpEffect);
               break;
@@ -146,7 +158,17 @@ class Platform {
                 position: { x: this.position.x, y: this.position.y - 50 },
                 dimensions: { width: 50, height: 50 },
                 type: PLAYER_POWERS.SUPER,
-                velocity: { x: 3, y: 0 }
+                velocity: { x: 3, y: 0 },
+                sprite: new Sprite({
+                  img: imageStore.powerUp,
+                  framesCount: 12,
+                  position: { x: 0, y: 0 },
+                  offset: { x: 50, y: 0 },
+                  printOffset: { x: 0, y: 0 },
+                  dimensions: { width: 50, height: 50 },
+                  framesRefreshFrequency: 10,
+                }),
+                activationFrames: 30,
               }));
               playAudio(audioStore.powerUpEffect);
               break;
@@ -156,7 +178,17 @@ class Platform {
             position: { x: this.position.x, y: this.position.y - 50 },
             dimensions: { width: 50, height: 50 },
             type: PLAYER_POWERS.ONEUP,
-            velocity: { x: 3, y: 0 }
+            velocity: { x: -3, y: 0 },
+            sprite: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 8,
+              position: { x: 0, y: 150 },
+              offset: { x: 50, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 50, height: 50 },
+              framesRefreshFrequency: 12,
+            }),
+            activationFrames: 20,
           }));
           playAudio(audioStore.powerUpEffect);
         } else if (this.color === 'star' || this.color === 'starhidden') {
@@ -164,7 +196,16 @@ class Platform {
             position: { x: this.position.x, y: this.position.y - 50 },
             dimensions: { width: 50, height: 50 },
             type: PLAYER_POWERS.INVINCIBLE,
-            velocity: { x: 3, y: -14 }
+            velocity: { x: 3, y: -14 },
+            sprite: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 1,
+              position: { x: 0, y: 100 },
+              offset: { x: 50, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 50, height: 50 },
+              framesRefreshFrequency: 10,
+            }),
           }));
           playAudio(audioStore.powerUpEffect);
         }
@@ -466,7 +507,7 @@ class Sprite {
     position,
     offset,
     dimensions,
-    framesFrequency = 5,
+    framesRefreshFrequency = 5,
     printOffset = { x: 0, y: 0 }
   }) {
     this.img = img;
@@ -474,21 +515,28 @@ class Sprite {
     this.position = position;
     this.offset = offset;
     this.dimensions = dimensions;
-    this.framesFrequency = framesFrequency;
+    this.framesRefreshFrequency = framesRefreshFrequency;
     this.printOffset = printOffset;
   }
 
-  draw({ position, dimensions }) {
+  draw({ position, dimensions, growingHeight = null }) {
+
+    if (growingHeight === null) {
+      growingHeight = dimensions.height;
+    }
+
+    const growingHeightCalc = this.dimensions.height * growingHeight / dimensions.height;
+
     ctx.drawImage(
       this.img,
       this.position.x + this.offset.x * this.framesCurrent,
       this.position.y + this.offset.y * this.framesCurrent,
       this.dimensions.width,
-      this.dimensions.height,
+      growingHeightCalc,
       position.x - scrollX + this.printOffset.x,
-      position.y + this.printOffset.y,
+      position.y + this.printOffset.y + dimensions.height - growingHeight,
       dimensions.width,
-      dimensions.height
+      growingHeight
     );
   }
 
@@ -596,14 +644,54 @@ class Player {
       if (this.direction === 'right') {
         fireballs.push(new FireBall({
           position: { x: this.position.x + this.dimensions.width, y: this.position.y + this.dimensions.height / 3 },
-          dimensions: { width: 6, height: 6 },
-          velocity: { x: 13, y: 3 }
+          dimensions: { width: 10, height: 10 },
+          velocity: { x: 13, y: 4 },
+          sprites: {
+            fire: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 7,
+              position: { x: 0, y: 204 },
+              offset: { x: 24, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 12, height: 12 },
+              framesRefreshFrequency: 10,
+            }),
+            explote: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 7,
+              position: { x: 0, y: 216 },
+              offset: { x: 24, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 12, height: 12 },
+              framesRefreshFrequency: 3,
+            })
+          },
         }));
       } else {
         fireballs.push(new FireBall({
           position: { x: this.position.x, y: this.position.y + this.dimensions.height / 3 },
-          dimensions: { width: 6, height: 6 },
-          velocity: { x: -13, y: 3 }
+          dimensions: { width: 16, height: 16 },
+          velocity: { x: -13, y: 3.5 },
+          sprites: {
+            fire: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 7,
+              position: { x: 0, y: 204 },
+              offset: { x: 24, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 12, height: 12 },
+              framesRefreshFrequency: 10,
+            }),
+            explote: new Sprite({
+              img: imageStore.powerUp,
+              framesCount: 7,
+              position: { x: 0, y: 216 },
+              offset: { x: 24, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 12, height: 12 },
+              framesRefreshFrequency: 3,
+            })
+          },
         }));
       }
       playAudio(audioStore.fireEffect)
@@ -1505,97 +1593,113 @@ class PowerUp {
 
   sprites = {};
   sprite = null
+  framesCountToActivate = 0
 
   constructor({
     position,
     dimensions,
     type = "powerup",
     velocity = { x: 3, y: 0 },
+    sprite = null,
+    activationFrames = 0
   }) {
     this.position = position;
     this.dimensions = dimensions;
     this.velocity = velocity;
     this.bounceVelocity = velocity.y;
     this.type = type;
+    this.sprite = sprite;
+    this.isActivated = false;
+    this.activationFrames = activationFrames;
+    this.framesCountToActivate = 0;
+
   }
 
   update() {
 
-    if (this.sprite !== null) this.sprite.nextFrame(1);
-
-    // check collisions with platforms from top to down
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.visible &&
-        this.position.y + this.dimensions.height <= platform.position.y &&
-        this.position.y + this.dimensions.height + this.velocity.y >=
-        platform.position.y &&
-        this.position.x + this.velocity.x <
-        platform.position.x + platform.dimensions.width &&
-        this.position.x + this.dimensions.width + this.velocity.x >
-        platform.position.x
-      ) {
-        this.position.y = platform.position.y - this.dimensions.height;
-        this.velocity.y = this.bounceVelocity;
-        break;
-      }
+    this.framesCountToActivate++;
+    if (this.framesCountToActivate >= this.activationFrames) {
+      this.isActivated = true;
     }
 
-    // check collisions with platforms from bottom to top
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.collisions.vertical &&
-        rectCollision(
-          this.position.x,
-          this.position.y + this.velocity.y,
-          this.dimensions.width,
-          this.dimensions.height,
-          platform.position.x,
-          platform.position.y,
-          platform.dimensions.width,
-          platform.dimensions.height
-        )
-      ) {
-        if (this.position.y > platform.position.y) {
-          this.position.y = platform.position.y + platform.dimensions.height;
+    if (this.isActivated) {
+
+      if (this.sprite !== null) this.sprite.nextFrame(1);
+
+      // check collisions with platforms from top to down
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.visible &&
+          this.position.y + this.dimensions.height <= platform.position.y &&
+          this.position.y + this.dimensions.height + this.velocity.y >=
+          platform.position.y &&
+          this.position.x + this.velocity.x <
+          platform.position.x + platform.dimensions.width &&
+          this.position.x + this.dimensions.width + this.velocity.x >
+          platform.position.x
+        ) {
+          this.position.y = platform.position.y - this.dimensions.height;
+          this.velocity.y = this.bounceVelocity;
+          break;
         }
-        this.velocity.y = 0;
-        break;
       }
-    }
 
-    this.position.y += this.velocity.y;
-    this.velocity.y += GRAVITY;
+      // check collisions with platforms from bottom to top
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.collisions.vertical &&
+          rectCollision(
+            this.position.x,
+            this.position.y + this.velocity.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            platform.position.x,
+            platform.position.y,
+            platform.dimensions.width,
+            platform.dimensions.height
+          )
+        ) {
+          if (this.position.y > platform.position.y) {
+            this.position.y = platform.position.y + platform.dimensions.height;
+          }
+          this.velocity.y = 0;
+          break;
+        }
+      }
 
-    // check collissions with platforms horizontally
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.collisions.horizontal &&
-        rectCollision(
-          this.position.x + this.velocity.x,
-          this.position.y,
-          this.dimensions.width,
-          this.dimensions.height,
-          platform.position.x,
-          platform.position.y,
-          platform.dimensions.width,
-          platform.dimensions.height
-        )
-      ) {
+      this.position.y += this.velocity.y;
+      this.velocity.y += GRAVITY;
+
+      // check collissions with platforms horizontally
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.collisions.horizontal &&
+          rectCollision(
+            this.position.x + this.velocity.x,
+            this.position.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            platform.position.x,
+            platform.position.y,
+            platform.dimensions.width,
+            platform.dimensions.height
+          )
+        ) {
+          this.velocity.x = -this.velocity.x;
+          break;
+        }
+      }
+
+      // check move beyond start of map
+      if (this.position.x + this.velocity.x < 0) {
         this.velocity.x = -this.velocity.x;
-        break;
       }
-    }
 
-    // check move beyond start of map
-    if (this.position.x + this.velocity.x < 0) {
-      this.velocity.x = -this.velocity.x;
+      this.position.x += this.velocity.x;
     }
-
-    this.position.x += this.velocity.x;
 
     this.draw();
   }
@@ -1606,6 +1710,12 @@ class PowerUp {
       this.position.x + this.dimensions.width - scrollX > 0 &&
       this.position.x - scrollX < canvas.width
     ) {
+
+      let height = this.dimensions.height
+      if (this.framesCountToActivate < this.activationFrames) {
+        height = Math.ceil(this.dimensions.height * this.framesCountToActivate / this.activationFrames);
+      }
+
       if (this.sprite == null) {
         switch (this.type) {
           case PLAYER_POWERS.SUPER: ctx.fillStyle = "yellow"; break;
@@ -1624,6 +1734,7 @@ class PowerUp {
         this.sprite.draw({
           position: this.position,
           dimensions: this.dimensions,
+          growingHeight: height
         });
       }
     }
@@ -1635,6 +1746,7 @@ class FireBall {
   velocity = { x: 0, y: 0 };
   dimensions = { width: 5, height: 5 };
   isJumping = true;
+  isAlive = true;
 
   sprites = {};
   sprite = null
@@ -1643,120 +1755,126 @@ class FireBall {
     position,
     dimensions,
     velocity = { x: 5, y: 5 },
+    sprites = {}
   }) {
     this.position = position;
     this.dimensions = dimensions;
     this.velocity = velocity;
-    this.bounceVelocity = -Math.abs(velocity.y*3);
+    this.bounceVelocity = -Math.abs(velocity.y * 3);
+    this.sprites = sprites
+    if (this.sprites.fire) this.sprite = this.sprites.fire;
   }
 
   update() {
 
     if (this.sprite !== null) this.sprite.nextFrame(1);
 
-    // check collisions with platforms from top to down
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.visible &&
-        this.position.y + this.dimensions.height <= platform.position.y &&
-        this.position.y + this.dimensions.height + this.velocity.y >=
-        platform.position.y &&
-        this.position.x + this.velocity.x <
-        platform.position.x + platform.dimensions.width &&
-        this.position.x + this.dimensions.width + this.velocity.x >
-        platform.position.x
-      ) {
-        this.position.y = platform.position.y - this.dimensions.height;
-        this.velocity.y = this.bounceVelocity;
-        break;
-      }
-    }
+    if (this.isAlive) {
 
-    // check collisions with platforms from bottom to top
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.collisions.vertical &&
-        rectCollision(
-          this.position.x,
-          this.position.y + this.velocity.y,
-          this.dimensions.width,
-          this.dimensions.height,
-          platform.position.x,
-          platform.position.y,
-          platform.dimensions.width,
-          platform.dimensions.height
-        )
-      ) {
-        if (this.position.y > platform.position.y) {
-          this.position.y = platform.position.y + platform.dimensions.height;
+      // check collisions with platforms from top to down
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.visible &&
+          this.position.y + this.dimensions.height <= platform.position.y &&
+          this.position.y + this.dimensions.height + this.velocity.y >=
+          platform.position.y &&
+          this.position.x + this.velocity.x <
+          platform.position.x + platform.dimensions.width &&
+          this.position.x + this.dimensions.width + this.velocity.x >
+          platform.position.x
+        ) {
+          this.position.y = platform.position.y - this.dimensions.height;
+          this.velocity.y = this.bounceVelocity;
+          break;
         }
-        this.velocity.y = 0;
-        break;
       }
-    }
 
-    this.position.y += this.velocity.y;
-    this.velocity.y += GRAVITY;
+      // check collisions with platforms from bottom to top
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.collisions.vertical &&
+          rectCollision(
+            this.position.x,
+            this.position.y + this.velocity.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            platform.position.x,
+            platform.position.y,
+            platform.dimensions.width,
+            platform.dimensions.height
+          )
+        ) {
+          if (this.position.y > platform.position.y) {
+            this.position.y = platform.position.y + platform.dimensions.height;
+          }
+          this.velocity.y = 0;
+          break;
+        }
+      }
 
-    // check colission with monsters
-    for (let i = 0; i < monsters.length; i++) {
-      const monster = monsters[i];
-      if (
-        monster.isAlive &&
-        rectCollision(
-          this.position.x + this.velocity.x,
-          this.position.y,
-          this.dimensions.width,
-          this.dimensions.height,
-          monster.position.x,
-          monster.position.y,
-          monster.dimensions.width,
-          monster.dimensions.height
-        )
-      ) {
-        monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+      this.position.y += this.velocity.y;
+      this.velocity.y += GRAVITY;
+
+      // check colission with monsters
+      for (let i = 0; i < monsters.length; i++) {
+        const monster = monsters[i];
+        if (
+          monster.isAlive &&
+          rectCollision(
+            this.position.x + this.velocity.x,
+            this.position.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            monster.position.x,
+            monster.position.y,
+            monster.dimensions.width,
+            monster.dimensions.height
+          )
+        ) {
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+          fireballs.splice(fireballs.indexOf(this), 1);
+          return;
+        }
+      }
+
+      // check collissions with platforms horizontally
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        if (
+          platform.collisions.horizontal &&
+          rectCollision(
+            this.position.x + this.velocity.x,
+            this.position.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            platform.position.x,
+            platform.position.y,
+            platform.dimensions.width,
+            platform.dimensions.height
+          )
+        ) {
+          this.die(() => fireballs.splice(fireballs.indexOf(this), 1), true);
+          return;
+        }
+      }
+
+      // check move beyond start of map
+      if (this.position.x + this.velocity.x < 0) {
         fireballs.splice(fireballs.indexOf(this), 1);
         return;
       }
-    }
 
-    // check collissions with platforms horizontally
-    for (let i = 0; i < platforms.length; i++) {
-      const platform = platforms[i];
-      if (
-        platform.collisions.horizontal &&
-        rectCollision(
-          this.position.x + this.velocity.x,
-          this.position.y,
-          this.dimensions.width,
-          this.dimensions.height,
-          platform.position.x,
-          platform.position.y,
-          platform.dimensions.width,
-          platform.dimensions.height
-        )
-      ) {
+      // check move beyond bottom of canvas
+      if (this.position.y + this.velocity.y > canvas.height) {
         fireballs.splice(fireballs.indexOf(this), 1);
         return;
       }
+
+
+      this.position.x += this.velocity.x;
     }
-
-    // check move beyond start of map
-    if (this.position.x + this.velocity.x < 0) {
-      fireballs.splice(fireballs.indexOf(this), 1);
-      return;
-    }
-
-    // check move beyond bottom of canvas
-    if (this.position.y + this.velocity.y > canvas.height) {
-      fireballs.splice(fireballs.indexOf(this), 1);
-      return;
-    }
-
-
-    this.position.x += this.velocity.x;
 
     this.draw();
   }
@@ -1783,4 +1901,15 @@ class FireBall {
       }
     }
   }
+
+  die(cb, hitBlock = false) {
+    if (hitBlock) {
+      playAudio(audioStore.fireballHitBlockEffect);
+    }
+    this.isAlive = false;
+    this.isDying = true;
+    if (this.sprites.explote) this.sprite = this.sprites.explote
+    setTimeout(cb, 300);
+  }
+  
 }
