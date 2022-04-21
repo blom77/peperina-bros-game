@@ -345,10 +345,17 @@ class Monster {
     this.velocity = velocity;
     this.color = color;
     this.activationOffset = activationOffset;
+    this.stomped = false;
   }
 
   update() {
     if (this.isDying) {
+
+      if(!this.stomped) {
+        this.position.y+=this.velocity.y;
+        this.velocity.y+=GRAVITY;
+      }
+
       this.draw();
     }
 
@@ -478,15 +485,22 @@ class Monster {
     }
   }
 
-  die(cb) {
+  die(cb, stomped = false) {
     playAudio(audioStore.monsterStompEffect);
     this.isAlive = false;
     this.isDying = true;
-    this.position.x -= 5;
-    this.dimensions.width += 10;
-    this.position.y = this.position.y + this.dimensions.height - 10;
-    this.dimensions.height = 10;
-    setTimeout(cb, 250);
+    this.stomped = stomped;
+    if (stomped) {
+      this.position.x -= 5;
+      this.dimensions.width += 10;
+      this.position.y = this.position.y + this.dimensions.height - 10;
+      this.dimensions.height = 10;
+      setTimeout(cb, 250);
+    } else {
+      this.velocity.y=-10; //make the monster jump and later fall
+      this.dimensions.height =-this.dimensions.height  //invert sprite vertically
+      setTimeout(cb, 2000);      
+    }
   }
 }
 
@@ -528,17 +542,30 @@ class Sprite {
 
     const growingHeightCalc = this.dimensions.height * growingHeight / dimensions.height;
 
+    //factors used to flip sprite horizontally or vertically based on negative dimensions
+    const factorX = Math.sign(dimensions.width);
+    const factorY = Math.sign(dimensions.height);
+
+    ctx.save();
+
+    if ( factorX<0 || factorY<0) {
+      ctx.scale(factorX, factorY);
+    }
+
     ctx.drawImage(
       this.img,
       this.position.x + this.offset.x * this.framesCurrent + offsetMode,
       this.position.y + this.offset.y * this.framesCurrent,
       this.dimensions.width,
       growingHeightCalc,
-      position.x - scrollX + this.printOffset.x,
-      position.y + this.printOffset.y + dimensions.height - growingHeight,
+      factorX*(position.x - scrollX + this.printOffset.x),
+      factorY*(position.y + this.printOffset.y + dimensions.height - growingHeight),
       dimensions.width,
       growingHeight
     );
+
+    ctx.restore();
+
   }
 
   nextFrame(speedBooster) {
@@ -877,7 +904,7 @@ class Player {
           monster.position.y + monster.dimensions.height / 2 &&
           this.velocity.y > 0
         ) {
-          monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1),true);
           this.velocity.y = -10;
         } else {
           if (this.isInvincible) {
@@ -931,12 +958,12 @@ class Player {
             playAudio(audioStore.powerUpAppliedEffect);
             break;
           case PLAYER_POWERS.INVINCIBLE:
-            //playAudio(audioStore.powerUpAppliedEffect);
+            //dont play power up effect, just accelerate bacgkround music
             this.isInvincible = true;
             audioStore.backgroundMusic.playbackRate = 1.5
             setTimeout(() => {
               audioStore.backgroundMusic.playbackRate = 0.75
-            }, 6000);
+            }, 6500);
             setTimeout(() => {
               this.isInvincible = false;
               audioStore.backgroundMusic.playbackRate = 1
@@ -983,6 +1010,7 @@ class Player {
     this.isAlive = false;
     this.isDying = true;
     this.velocity.y = -20;
+    this.dimensions.height =-this.dimensions.height  //invert sprite vertically
     setTimeout(cb, 1000);
   }
 }
