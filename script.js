@@ -508,7 +508,8 @@ class Sprite {
     offset,
     dimensions,
     framesRefreshFrequency = 5,
-    printOffset = { x: 0, y: 0 }
+    printOffset = { x: 0, y: 0 },
+    offsetModes = { default: 0 },
   }) {
     this.img = img;
     this.framesCount = framesCount;
@@ -519,7 +520,7 @@ class Sprite {
     this.printOffset = printOffset;
   }
 
-  draw({ position, dimensions, growingHeight = null }) {
+  draw({ position, dimensions, growingHeight = null, offsetMode = 0 }) {
 
     if (growingHeight === null) {
       growingHeight = dimensions.height;
@@ -529,7 +530,7 @@ class Sprite {
 
     ctx.drawImage(
       this.img,
-      this.position.x + this.offset.x * this.framesCurrent,
+      this.position.x + this.offset.x * this.framesCurrent + offsetMode,
       this.position.y + this.offset.y * this.framesCurrent,
       this.dimensions.width,
       growingHeightCalc,
@@ -562,70 +563,76 @@ class Player {
     this.isDiying = false;
     this.powers = PLAYER_POWERS.NONE;
     this.isInvincible = false
+    this.offsetModes = {
+      none: 0,
+      super: 192,
+      fireball: 192* 2,
+      invincible: 192* 3
+    }
     this.sprites = {
       runRight: new Sprite({
         img: imageStore.player,
-        framesCount: 3,
-        position: { x: 15, y: 30 },
-        offset: { x: 48, y: 0 },
+        framesCount: 2,
+        position: { x: 11, y: 24 },
+        offset: { x: 128, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       runLeft: new Sprite({
         img: imageStore.player,
-        framesCount: 3,
-        position: { x: 15, y: 78 },
-        offset: { x: 48, y: 0 },
+        framesCount: 2,
+        position: { x: 11, y: 24 + 64 },
+        offset: { x: 128, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       standRight: new Sprite({
         img: imageStore.player,
         framesCount: 3,
-        position: { x: 15, y: 4 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11, y: 24 + 4 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       standLeft: new Sprite({
         img: imageStore.player,
         framesCount: 3,
-        position: { x: 15, y: 5 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11, y: 24 + 5 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       jumpRight: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 15, y: 6 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11, y: 24 + 6 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       jumpLeft: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 15, y: 7 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11, y: 24 + 7 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       fallRight: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 15 + 48, y: 6 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11 + 64, y: 24 + 6 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
       fallLeft: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 15 + 48, y: 7 * 48 + 30 },
-        offset: { x: 48, y: 0 },
+        position: { x: 11 + 64, y: 24 + 7 * 64 },
+        offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 18, height: 18 },
+        dimensions: { width: 40, height: 40 },
       }),
     };
     this.sprite = this.sprites.standRight;
@@ -643,8 +650,8 @@ class Player {
     if (this.powers === PLAYER_POWERS.FIREBALL && !this.coolingDown) {
       if (this.direction === 'right') {
         fireballs.push(new FireBall({
-          position: { x: this.position.x + this.dimensions.width, y: this.position.y + this.dimensions.height / 3 },
-          dimensions: { width: 10, height: 10 },
+          position: { x: this.position.x + this.dimensions.width - 12, y: this.position.y + this.dimensions.height / 3 },
+          dimensions: { width: 12, height: 12 },
           velocity: { x: 13, y: 4 },
           sprites: {
             fire: new Sprite({
@@ -669,9 +676,9 @@ class Player {
         }));
       } else {
         fireballs.push(new FireBall({
-          position: { x: this.position.x, y: this.position.y + this.dimensions.height / 3 },
-          dimensions: { width: 16, height: 16 },
-          velocity: { x: -13, y: 3.5 },
+          position: { x: this.position.x - 6, y: this.position.y + this.dimensions.height / 3 },
+          dimensions: { width: 12, height: 12 },
+          velocity: { x: -13, y: 4 },
           sprites: {
             fire: new Sprite({
               img: imageStore.powerUp,
@@ -759,6 +766,7 @@ class Player {
     }
 
 
+
     // check collisions with platforms from top to down
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
@@ -786,16 +794,26 @@ class Player {
       if (
         this.velocity.y < 0 &&
         platform.collisions.vertical &&
-        rectCollision(
-          this.position.x,
+        (rectCollision( // head
+          this.position.x + (this.direction === 'right' ? this.dimensions.width / 2 : 0),
           this.position.y + this.velocity.y,
-          this.dimensions.width,
-          this.dimensions.height,
+          this.dimensions.width / 2,
+          this.dimensions.height / 2,
           platform.position.x,
           platform.position.y,
           platform.dimensions.width,
           platform.dimensions.height
-        )
+        ) ||
+          rectCollision( // body
+            this.position.x,
+            this.position.y + this.dimensions.height / 2 + this.velocity.y,
+            this.dimensions.width,
+            this.dimensions.height / 2,
+            platform.position.x,
+            platform.position.y,
+            platform.dimensions.width,
+            platform.dimensions.height
+          ))
       ) {
         if (this.position.y > platform.position.y) {
           this.position.y = platform.position.y + platform.dimensions.height;
@@ -820,6 +838,7 @@ class Player {
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
       if (
+        platform.visible &&
         platform.collisions.horizontal &&
         rectCollision(
           this.position.x + this.velocity.x,
@@ -912,11 +931,16 @@ class Player {
             playAudio(audioStore.powerUpAppliedEffect);
             break;
           case PLAYER_POWERS.INVINCIBLE:
-            playAudio(audioStore.powerUpAppliedEffect);
+            //playAudio(audioStore.powerUpAppliedEffect);
             this.isInvincible = true;
+            audioStore.backgroundMusic.playbackRate = 1.5
+            setTimeout(() => {
+              audioStore.backgroundMusic.playbackRate = 0.75
+            }, 6000);
             setTimeout(() => {
               this.isInvincible = false;
-            }, 7000);
+              audioStore.backgroundMusic.playbackRate = 1
+            }, 8000);
             break;
           case PLAYER_POWERS.ONEUP:
             playAudio(audioStore.oneLiveUpEffect);
@@ -939,31 +963,18 @@ class Player {
   }
 
   draw() {
+
+    let mode = this.powers;
+    if (this.isInvincible)
+      mode = 'invincible';
+
     if (this.sprite) {
       this.sprite.draw({
         position: this.position,
         dimensions: this.dimensions,
+        offsetMode: this.offsetModes[mode]
       });
     }
-
-    if (this.isInvincible) {
-      ctx.fillStyle = 'orange'
-    } else {
-      switch (this.powers) {
-        case PLAYER_POWERS.NONE:
-          ctx.fillStyle = 'transparent'
-          break;
-        case PLAYER_POWERS.SUPER:
-          ctx.fillStyle = 'yellow'
-          break;
-        case PLAYER_POWERS.FIREBALL:
-          ctx.fillStyle = 'red'
-          break;
-      }
-    }
-
-    ctx.fillRect(this.position.x - scrollX, this.position.y, 10, 10)
-
   }
 
   die(cb) {
@@ -1911,5 +1922,7 @@ class FireBall {
     if (this.sprites.explote) this.sprite = this.sprites.explote
     setTimeout(cb, 300);
   }
-  
+
 }
+
+
