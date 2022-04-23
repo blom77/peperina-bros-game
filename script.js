@@ -10,6 +10,12 @@ const PLAYER_POWERS = {
   ONEUP: '1up',
 }
 
+const COLLISIONRESULT = {
+  NOHIT: 'no-hit',
+  TAKEHIT: 'take-hit',
+  FATALHIT: 'fatal-hit'
+}
+
 const audioStore = {
   backgroundMusic: loadAudio('./audio/background-music.mp3.ogg', 0.2, true),
   loseMusic: loadAudio('./audio/lose.ogg', 1),
@@ -27,12 +33,14 @@ const imageStore = {
   surpriseBlock: loadImage("./img/surprise-block.png"),
   disabledBlock: loadImage("./img/disabled-block.png"),
   brownBlock: loadImage("./img/brown-wooden-block.png"),
+  debrisBrownBlock: loadImage("./img/debris-brown-wooden-block.png"),
   redBlock: loadImage("./img/red-wooden-block.png"),
   blueBlock: loadImage("./img/blue-wooden-block.png"),
   floorBlock: loadImage("./img/floor-block.png"),
   pipe: loadImage("./img/pipe.png"),
   player: loadImage("./img/player.png"),
   monsterKokoa: loadImage("./img/kokoa.png"),
+  monsterCatRoomba: loadImage("./img/cat-roomba.png"),
   background: loadImage("./img/background.jpg"),
   powerUp: loadImage("./img/power-up.png"),
 }
@@ -70,6 +78,82 @@ function loadImage(src) {
   return img;
 }
 
+
+class Debris {
+  position = { x: 0, y: 0 };
+  velocity = { x: 0, y: 0 };
+  dimensions = { width: 20, height: 20 };
+  color = "lightbrown";
+  img = null;
+
+  constructor({
+    position,
+    velocity = { x: 0, y: 0 },
+    dimensions = { width: 20, height: 20 },
+    color = "lightbrown"
+  }) {
+    this.velocity = velocity;
+    this.position = position;
+    this.dimensions = dimensions;
+    this.color = color;
+
+    if (color === "lightbrown") {
+      this.img = imageStore.debrisBrownBlock
+    }
+
+  }
+
+  update() {
+    this.velocity.y += GRAVITY
+    this.position.y += this.velocity.y;
+    this.position.x += this.velocity.x;
+
+    if (
+      this.position.x + this.dimensions.width - scrollX < 0 ||
+      this.position.x - scrollX > canvas.width ||
+      this.position.y > canvas.height
+    ) {
+      //if out of view then destroy object
+      debris.splice(debris.indexOf(this), 1);
+    }
+
+    this.draw();
+  }
+
+  draw() {
+    if (
+      this.position.x + this.dimensions.width - scrollX > 0 &&
+      this.position.x - scrollX < canvas.width
+    ) { // only draw if platform is visible in the screen
+      if (this.img !== null) {
+        ctx.drawImage(
+          this.img,
+          0,
+          0,
+          this.dimensions.width,
+          this.dimensions.height,
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
+      } else {
+        ctx.drawImage(
+          imageStore.brownBlock,
+          0,
+          0,
+          this.dimensions.width,
+          this.dimensions.height,
+          this.position.x - scrollX,
+          this.position.y,
+          this.dimensions.width,
+          this.dimensions.height
+        );
+      }
+    }
+  }
+
+}
 
 class Platform {
   position = { x: 0, y: 0 };
@@ -299,6 +383,7 @@ class Platform {
   }
 }
 
+
 class Monster {
   position = { x: 30, y: 0 };
   velocity = { x: 0, y: 0 };
@@ -311,27 +396,83 @@ class Monster {
   activationOffset = 0;
   direction = "left";
 
-  sprites = {
-    runRight: new Sprite({
-      img: imageStore.monsterKokoa,
-      framesCount: 4,
-      position: { x: 24, y: 160 },
-      offset: { x: 128, y: 0 },
-      printOffset: { x: 0, y: 4 },
-      dimensions: { width: 92, height: 86 },
-      framesFrequency: 3,
-    }),
-    runLeft: new Sprite({
-      img: imageStore.monsterKokoa,
-      framesCount: 4,
-      position: { x: 14, y: 416 },
-      offset: { x: 128, y: 0 },
-      printOffset: { x: 0, y: 4 },
-      dimensions: { width: 92, height: 86 },
-      framesFrequency: 3,
-    }),
-  };
-  sprite = this.sprites.runLeft;
+
+  setSprites() {
+    switch (this.color) {
+      case 'cat-with-roomba':
+        this.sprites = {
+          runRight: new Sprite({
+            img: imageStore.monsterCatRoomba,
+            framesCount: 4,
+            position: { x: 0, y: 64 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 2 },
+            dimensions: { width: 64, height: 64 },
+            margin: { top: 0, bottom: 0, right: 9, left: 9 },
+            framesFrequency: 3,
+          }),
+          runLeft: new Sprite({
+            img: imageStore.monsterCatRoomba,
+            framesCount: 4,
+            position: { x: 0, y: 0 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 2 },
+            dimensions: { width: 64, height: 64 },
+            margin: { top: 0, bottom: 0, right: 9, left: 9 },
+            framesFrequency: 3,
+          })
+        }
+        break;
+      case 'cat':
+        this.sprites = {
+          runRight: new Sprite({
+            img: imageStore.monsterCatRoomba,
+            framesCount: 4,
+            position: { x: 0, y: 64 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 2 },
+            dimensions: { width: 64, height: 64 - 16 },
+            margin: { top: 0, bottom: 0, right: 9, left: 9 },
+            framesFrequency: 3,
+          }),
+          runLeft: new Sprite({
+            img: imageStore.monsterCatRoomba,
+            framesCount: 4,
+            position: { x: 0, y: 0 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 2 },
+            dimensions: { width: 64, height: 64 - 16 },
+            margin: { top: 0, bottom: 0, right: 9, left: 9 },
+            framesFrequency: 3,
+          })
+        }
+        break;
+      default:
+        this.sprites = {
+          runRight: new Sprite({
+            img: imageStore.monsterKokoa,
+            framesCount: 4,
+            position: { x: 24, y: 160 },
+            offset: { x: 128, y: 0 },
+            printOffset: { x: 0, y: 4 },
+            dimensions: { width: 92, height: 86 },
+            framesFrequency: 3,
+          }),
+          runLeft: new Sprite({
+            img: imageStore.monsterKokoa,
+            framesCount: 4,
+            position: { x: 14, y: 416 },
+            offset: { x: 128, y: 0 },
+            printOffset: { x: 0, y: 4 },
+            dimensions: { width: 92, height: 86 },
+            framesFrequency: 3,
+          })
+        }
+    }
+
+    this.sprite = this.sprites.runLeft;
+
+  }
 
   constructor({
     position,
@@ -346,14 +487,16 @@ class Monster {
     this.color = color;
     this.activationOffset = activationOffset;
     this.stomped = false;
+    this.setSprites();
+
   }
 
   update() {
     if (this.isDying) {
 
-      if(!this.stomped) {
-        this.position.y+=this.velocity.y;
-        this.velocity.y+=GRAVITY;
+      if (!this.stomped) {
+        this.position.y += this.velocity.y;
+        this.velocity.y += GRAVITY;
       }
 
       this.draw();
@@ -468,7 +611,7 @@ class Monster {
       this.position.x + this.dimensions.width - scrollX > 0 &&
       this.position.x - scrollX < canvas.width
     ) {
-      if (this.color !== "brown") {
+      if (!this.sprite) {
         ctx.fillStyle = this.color;
         ctx.fillRect(
           this.position.x - scrollX,
@@ -485,23 +628,147 @@ class Monster {
     }
   }
 
+  stompedByPlayer() {
+    this.die(() => monsters.splice(monsters.indexOf(this), 1), true);
+    return COLLISIONRESULT.NOHIT
+  }
+
+  collisionByPlayer() {
+    return COLLISIONRESULT.TAKEHIT
+  }
+
   die(cb, stomped = false) {
     playAudio(audioStore.monsterStompEffect);
     this.isAlive = false;
     this.isDying = true;
     this.stomped = stomped;
-    if (stomped) {
+
+    if (this.color === "cat-with-roomba") {
+      if (this.stomped) {
+        this.dimensions.height = this.dimensions.height - 16 //remove roomba height
+        this.color = "cat"
+        this.setSprites();
+        // add the roomba as new monster
+        monsters.push(new MonsterRoomba({
+          position: { x: this.position.x, y: this.position.y + this.dimensions.height - 16 },
+          dimensions: { width: this.dimensions.width, height: 16 },
+          velocity: { x: 0, y: 0 },
+          color: 'roomba'
+        }));
+
+      }
+      this.stomped = false
+      this.velocity.y = -10; //make the monster jump and later fall
+      this.dimensions.height = -this.dimensions.height  //invert sprite vertically
+      setTimeout(cb, 2000);
+      return;
+    }
+
+
+    if (stomped && this.color === 'brown') {
       this.position.x -= 5;
       this.dimensions.width += 10;
       this.position.y = this.position.y + this.dimensions.height - 10;
       this.dimensions.height = 10;
       setTimeout(cb, 250);
     } else {
-      this.velocity.y=-10; //make the monster jump and later fall
-      this.dimensions.height =-this.dimensions.height  //invert sprite vertically
-      setTimeout(cb, 2000);      
+      this.stomped = false
+      this.velocity.y = -10; //make the monster jump and later fall
+      this.dimensions.height = -this.dimensions.height  //invert sprite vertically
+      setTimeout(cb, 2000);
     }
   }
+
+}
+
+class MonsterRoomba extends Monster {
+  setSprites() {
+    this.sprites = {
+      runRight: new Sprite({
+        img: imageStore.monsterCatRoomba,
+        framesCount: 4,
+        position: { x: 0, y: 64 + 49 },
+        offset: { x: 64, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 64, height: 16 },
+        margin: { top: 0, bottom: 0, right: 9, left: 9 },
+        framesFrequency: 3,
+      }),
+      runLeft: new Sprite({
+        img: imageStore.monsterCatRoomba,
+        framesCount: 4,
+        position: { x: 0, y: 0 + 49 },
+        offset: { x: 64, y: 0 },
+        printOffset: { x: 0, y: 2 },
+        dimensions: { width: 64, height: 16 },
+        margin: { top: 0, bottom: 0, right: 9, left: 9 },
+        framesFrequency: 3,
+      })
+    }
+    this.sprite = this.sprites.runLeft;
+  }
+
+  update() {
+    super.update();
+
+    //check collision with other monsters
+    for (let i = 0; i < monsters.length; i++) {
+      const monster = monsters[i];
+      // if monster is close to become visible
+      if (monster.position.x + monster.dimensions.width - scrollX > - 150 &&
+        monster.position.x - scrollX < canvas.width + 150)
+        if (
+          monster !== this &&
+          monster.isAlive &&
+          rectCollision(
+            this.position.x + this.velocity.x,
+            this.position.y,
+            this.dimensions.width,
+            this.dimensions.height,
+            monster.position.x,
+            monster.position.y,
+            monster.dimensions.width,
+            monster.dimensions.height
+          )
+        ) {
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
+        }
+    }
+
+  }
+
+  draw() {
+    super.draw();
+  }
+
+  stompedByPlayer() {
+    if (this.velocity.x != 0)
+      this.velocity.x = 0;
+    else if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
+      this.velocity.x = 10
+    else
+      this.velocity.x = -10
+    return COLLISIONRESULT.NOHIT
+  }
+
+  collisionByPlayer() {
+    if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
+      this.velocity.x = 10
+    else
+      this.velocity.x = -10
+    return COLLISIONRESULT.NOHIT;    
+  }
+
+  die(cb, stomped = false) {
+    playAudio(audioStore.monsterStompEffect);
+    this.isAlive = false;
+    this.isDying = true;
+    this.stomped = false
+    this.velocity.y = -10; //make the monster jump and later fall
+    this.dimensions.height = -this.dimensions.height  //invert sprite vertically
+    setTimeout(cb, 2000);
+  }
+
 }
 
 class Sprite {
@@ -514,6 +781,7 @@ class Sprite {
   offset = { x: 0, y: 0 };
   printOffset = { x: 0, y: 0 };
   dimensions = { width: 0, height: 0 };
+  margin = { top: 0, right: 0, left: 0, bottom: 0 };
 
   constructor({
     img,
@@ -523,7 +791,7 @@ class Sprite {
     dimensions,
     framesRefreshFrequency = 5,
     printOffset = { x: 0, y: 0 },
-    offsetModes = { default: 0 },
+    margin = { top: 0, right: 0, left: 0, bottom: 0 }
   }) {
     this.img = img;
     this.framesCount = framesCount;
@@ -531,6 +799,7 @@ class Sprite {
     this.offset = offset;
     this.dimensions = dimensions;
     this.framesRefreshFrequency = framesRefreshFrequency;
+    this.margin = margin;
     this.printOffset = printOffset;
   }
 
@@ -546,22 +815,41 @@ class Sprite {
     const factorX = Math.sign(dimensions.width);
     const factorY = Math.sign(dimensions.height);
 
+
+    //calculate where to print full sprite based on sprite size, margins, and object -player, monster, etc- size
+    const srcImgX = this.position.x + this.offset.x * this.framesCurrent + offsetMode;
+    const srcImgY = this.position.y + this.offset.y * this.framesCurrent;
+    const srcImgWidth = this.dimensions.width;
+    const srcImgHeight = growingHeightCalc;
+    const destX = factorX * (position.x - scrollX + this.printOffset.x);
+    const destY = factorY * (position.y + this.printOffset.y + dimensions.height - growingHeight);
+    const destWidth = dimensions.width;
+    const destHeight = growingHeight;
+
+    const imgWithinSpriteWidth = srcImgWidth - this.margin.left - this.margin.right;
+    const imgWithinSpriteHeight = srcImgHeight - this.margin.top - this.margin.bottom;
+
+    const destMarginLeft = this.margin.left * dimensions.width / imgWithinSpriteWidth
+    const destMarginRight = this.margin.right * dimensions.width / imgWithinSpriteWidth
+    const destMarginTop = this.margin.top * dimensions.height / imgWithinSpriteHeight
+    const destMarginBottom = this.margin.bottom * dimensions.height / imgWithinSpriteHeight
+
     ctx.save();
 
-    if ( factorX<0 || factorY<0) {
+    if (factorX < 0 || factorY < 0) {
       ctx.scale(factorX, factorY);
     }
 
     ctx.drawImage(
       this.img,
-      this.position.x + this.offset.x * this.framesCurrent + offsetMode,
-      this.position.y + this.offset.y * this.framesCurrent,
-      this.dimensions.width,
-      growingHeightCalc,
-      factorX*(position.x - scrollX + this.printOffset.x),
-      factorY*(position.y + this.printOffset.y + dimensions.height - growingHeight),
-      dimensions.width,
-      growingHeight
+      Math.ceil(srcImgX),
+      Math.ceil(srcImgY),
+      Math.ceil(srcImgWidth),
+      Math.ceil(srcImgHeight),
+      Math.ceil(destX - destMarginLeft),
+      Math.ceil(destY - destMarginTop),
+      Math.ceil(destWidth + destMarginLeft + destMarginRight),
+      Math.ceil(destHeight + destMarginTop + destMarginBottom)
     );
 
     ctx.restore();
@@ -581,7 +869,7 @@ class Player {
   constructor() {
     this.position = { x: 100, y: 425 };
     this.velocity = { x: 0, y: 0 };
-    this.dimensions = { width: 40, height: 40 };
+    this.dimensions = { width: 42, height: 42 };
     this.resizeDimensions = { ...this.dimensions };
     this.direction = "right";
     this.isJumping = true;
@@ -593,73 +881,81 @@ class Player {
     this.offsetModes = {
       none: 0,
       super: 192,
-      fireball: 192* 2,
-      invincible: 192* 3
+      fireball: 192 * 2,
+      invincible: 192 * 3
     }
     this.sprites = {
       runRight: new Sprite({
         img: imageStore.player,
         framesCount: 2,
-        position: { x: 11, y: 24 },
+        position: { x: 0, y: 0 },
         offset: { x: 128, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       runLeft: new Sprite({
         img: imageStore.player,
         framesCount: 2,
-        position: { x: 11, y: 24 + 64 },
+        position: { x: 0, y: 64 },
         offset: { x: 128, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       standRight: new Sprite({
         img: imageStore.player,
         framesCount: 3,
-        position: { x: 11, y: 24 + 4 * 64 },
+        position: { x: 0, y: 4 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       standLeft: new Sprite({
         img: imageStore.player,
         framesCount: 3,
-        position: { x: 11, y: 24 + 5 * 64 },
+        position: { x: 0, y: 5 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       jumpRight: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 11, y: 24 + 6 * 64 },
+        position: { x: 0, y: 6 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       jumpLeft: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 11, y: 24 + 7 * 64 },
+        position: { x: 0, y: 7 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       fallRight: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 11 + 64, y: 24 + 6 * 64 },
+        position: { x: 64, y: 6 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
       fallLeft: new Sprite({
         img: imageStore.player,
         framesCount: 1,
-        position: { x: 11 + 64, y: 24 + 7 * 64 },
+        position: { x: 64, y: 7 * 64 },
         offset: { x: 64, y: 0 },
         printOffset: { x: 0, y: 2 },
-        dimensions: { width: 40, height: 40 },
+        dimensions: { width: 64, height: 64 },
+        margin: { top: 22, right: 11, bottom: 0, left: 11 }
       }),
     };
     this.sprite = this.sprites.standRight;
@@ -674,7 +970,7 @@ class Player {
   }
 
   fire() {
-    if (this.powers === PLAYER_POWERS.FIREBALL && !this.coolingDown) {
+    if (this.powers === PLAYER_POWERS.FIREBALL && !this.coolingDown && !this.poweringDown) {
       if (this.direction === 'right') {
         fireballs.push(new FireBall({
           position: { x: this.position.x + this.dimensions.width - 12, y: this.position.y + this.dimensions.height / 3 },
@@ -792,8 +1088,6 @@ class Player {
       this.position.x += 1;
     }
 
-
-
     // check collisions with platforms from top to down
     for (let i = 0; i < platforms.length; i++) {
       const platform = platforms[i];
@@ -844,14 +1138,35 @@ class Player {
       ) {
         if (this.position.y > platform.position.y) {
           this.position.y = platform.position.y + platform.dimensions.height;
-          //hit platform from bottom
-          //to manage here what to do with hit platforms,
-          //for instance delete them with explosion animation: 
-          //if powers, destroy the block
-          //if no powers, just move the block
+
           platform.hitByPlayer(this.powers, 'bottom');
-          if (this.powers !== PLAYER_POWERS.NONE && platform.color === "lightbrown")
+          if (this.powers !== PLAYER_POWERS.NONE && platform.color === "lightbrown" && !this.poweringDown) {
+            debris.push(new Debris({
+              position: { x: platform.position.x, y: platform.position.y },
+              velocity: { x: -4, y: -20 },
+              dimensions: { width: 16, height: 16 },
+              color: "lightbrown"
+            }));
+            debris.push(new Debris({
+              position: { x: platform.position.x + platform.dimensions.width - 16, y: platform.position.y },
+              velocity: { x: 4, y: -20 },
+              dimensions: { width: 16, height: 16 },
+              color: "lightbrown"
+            }));
+            debris.push(new Debris({
+              position: { x: platform.position.x, y: platform.position.y + platform.dimensions.height - 16 },
+              velocity: { x: -4, y: -10 },
+              dimensions: { width: 16, height: 16 },
+              color: "lightbrown"
+            }));
+            debris.push(new Debris({
+              position: { x: platform.position.x + platform.dimensions.width - 16, y: platform.position.y + platform.dimensions.height - 16 },
+              velocity: { x: 4, y: -10 },
+              dimensions: { width: 16, height: 16 },
+              color: "lightbrown"
+            }));
             platforms.splice(i, 1);
+          }
         }
         this.velocity.y = 0;
         break;
@@ -899,30 +1214,32 @@ class Player {
           monster.dimensions.height
         )
       ) {
-        if (
-          this.position.y + this.dimensions.height <
-          monster.position.y + monster.dimensions.height / 2 &&
-          this.velocity.y > 0
-        ) {
-          monster.die(() => monsters.splice(monsters.indexOf(monster), 1),true);
-          this.velocity.y = -10;
-        } else {
-          if (this.isInvincible) {
-            monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
-          }
-          else if (this.powers === PLAYER_POWERS.NONE) {
-            this.die(() => {
-              alert("you lose!");
-              location.reload(false);
-            });
-          } else {
-            //play powerdown sound effect
-            this.poweringDown = true;
-            this.resizeDimensions = { width: 40, height: 40 }
-            //sprite for powering down here
-            setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false }, 2000);
-          }
+        if (this.isInvincible) {
+          monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
         }
+        else if (this.position.y + this.dimensions.height <
+            monster.position.y + monster.dimensions.height / 2 &&
+            this.velocity.y > 0
+        ) {
+          // Player stomp on top of monster
+          monster.stompedByPlayer();
+          this.velocity.y = -10
+        }
+        else {
+          // Player hit from bottom or side the monster
+          if (monster.collisionByPlayer() === COLLISIONRESULT.TAKEHIT) {
+            if (this.powers === PLAYER_POWERS.NONE) 
+              this.die(() => {
+                alert("you lose!");
+                location.reload(false);
+              });
+            else {
+              this.poweringDown = true;
+              this.resizeDimensions = { width: 40, height: 40 }
+              setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false }, 2000);
+            }
+          }
+        } 
         break;
       }
     }
@@ -996,11 +1313,12 @@ class Player {
       mode = 'invincible';
 
     if (this.sprite) {
-      this.sprite.draw({
-        position: this.position,
-        dimensions: this.dimensions,
-        offsetMode: this.offsetModes[mode]
-      });
+      if (!this.poweringDown || this.sprite.framesRefreshCount % 4 !== 0)
+        this.sprite.draw({
+          position: this.position,
+          dimensions: this.dimensions,
+          offsetMode: this.offsetModes[mode]
+        });
     }
   }
 
@@ -1010,7 +1328,8 @@ class Player {
     this.isAlive = false;
     this.isDying = true;
     this.velocity.y = -20;
-    this.dimensions.height =-this.dimensions.height  //invert sprite vertically
+    this.dimensions.height = -this.dimensions.height  //invert sprite vertically
+    this.sprite = this.sprites.standLeft;
     setTimeout(cb, 1000);
   }
 }
@@ -1039,6 +1358,7 @@ function createPlatformBlocks({ position, dimensions, color, collisions, blockWi
 }
 
 const player = new Player();
+const debris = [];
 const platforms = [
   new Platform({
     position: { x: 0, y: 500 },
@@ -1450,9 +1770,9 @@ const monsters = [
     activationOffset: 80,
   }),
   new Monster({
-    position: { x: 4400, y: 439 },
-    dimensions: { width: 60, height: 57 },
-    color: "lightgreen",
+    position: { x: 4400, y: 500 - 64 },
+    dimensions: { width: 46, height: 64 },
+    color: "cat-with-roomba",
   }),
   new Monster({
     position: { x: 4750, y: 439 },
@@ -1538,6 +1858,7 @@ function animate() {
   player.update();
   fireballs.forEach((fireball) => fireball.update());
   monsters.forEach((monster) => monster.update());
+  debris.forEach((debris_one) => debris_one.update());
 
   //adjust scroll right side
   if (player.position.x - scrollX > canvas.width / 2) {
@@ -1860,6 +2181,7 @@ class FireBall {
       for (let i = 0; i < monsters.length; i++) {
         const monster = monsters[i];
         if (
+          monster.isActivated &&
           monster.isAlive &&
           rectCollision(
             this.position.x + this.velocity.x,
@@ -1942,7 +2264,10 @@ class FireBall {
   }
 
   die(cb, hitBlock = false) {
-    if (hitBlock) {
+    if (hitBlock &&
+      this.position.x + this.dimensions.width - scrollX > 0 &&
+      this.position.x - scrollX < canvas.width &&
+      this.position.y < canvas.height) {
       playAudio(audioStore.fireballHitBlockEffect);
     }
     this.isAlive = false;
