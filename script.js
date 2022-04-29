@@ -1,5 +1,9 @@
 const canvas = document.getElementById("game-canvas");
 const btnStart = document.getElementById("button-start");
+const elPoints = document.getElementById("points");
+const elLives = document.getElementById("lives");
+const elTimeLeft = document.getElementById("timeLeft");
+const elTreats = document.getElementById("treats");
 const ctx = canvas.getContext("2d");
 const GRAVITY = 1;
 const PLAYER_POWERS = {
@@ -25,8 +29,10 @@ const audioStore = {
   fireEffect: loadAudio('./audio/shoot.ogg', 1),
   powerUpEffect: loadAudio('./audio/power-up.mp3', 1),
   powerUpAppliedEffect: loadAudio('./audio/power-up-applied2.mp3', 0.7),
-  oneLiveUpEffect: loadAudio('./audio/one-live-up.mp3', 1),
+  oneLiveUpEffect: loadAudio('./audio/one-live-up.mp3', 0.7),
   fireballHitBlockEffect: loadAudio('./audio/shoot.ogg', 1),
+  whisleEffect: loadAudio('./audio/whisle.ogg', 1),
+  winJingle: loadAudio('./audio/winjingle.ogg', 1),
 }
 
 const imageStore = {
@@ -43,12 +49,18 @@ const imageStore = {
   monsterCatRoomba: loadImage("./img/cat-roomba.png"),
   background: loadImage("./img/background.jpg"),
   powerUp: loadImage("./img/power-up.png"),
+  treat: loadImage("./img/treat2-Sheet.png"),
+  treatJump: loadImage("./img/treat-jump-Sheet.png"),
+  teepee: loadImage("./img/teepee.png"),
+  teepeeFront: loadImage("./img/teepee-front.png"),
+  enterTeepee: loadImage("./img/enter-teepee-sprite-Sheet.png"),
 }
+let teepeeX;
 
 function startGame() {
   btnStart.classList.add('hide');
   audioStore.backgroundMusic.play();
-  animate();
+  requestAnimationFrame(animate);
 }
 
 function rectCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
@@ -79,6 +91,97 @@ function loadImage(src) {
 }
 
 
+class Game {
+  constructor() {
+    this.points = 0;
+    this.treats = 0;
+    this.lives = 3;
+    this.treatsToGetLive = 10;
+    this.map = { end: 9550 };
+  }
+
+  update() {
+    this.draw();
+  }
+
+  addLives(plusLives) {
+    this.lives += plusLives
+    playAudio(audioStore.oneLiveUpEffect);
+  }
+
+  addTreats(plusTreats) {
+    this.treats += plusTreats
+    playAudio(audioStore.whisleEffect);
+
+    if (this.treats >= this.treatsToGetLive) {
+      this.addLives(Math.floor(this.treats / this.treatsToGetLive));
+      this.treats = this.treats % this.treatsToGetLive;
+    }
+  }
+
+  draw() {
+    elTreats.textContent = this.treats;
+    elLives.textContent = this.lives;
+    elPoints.textContent = this.points;
+    elTimeLeft.textContent = "catchphrase..."
+  }
+}
+
+class Effect {
+  position = { x: 0, y: 0 };
+  velocity = { x: 0, y: 0 };
+  dimensions = { width: 20, height: 20 };
+  sprite = null;
+  run = 'once';
+
+  constructor({
+    position,
+    velocity = { x: 0, y: 0 },
+    dimensions = { width: 20, height: 20 },
+    sprite = null,
+    run = 'once',
+    applyGravity = true
+  }) {
+    this.velocity = velocity;
+    this.position = position;
+    this.dimensions = dimensions;
+    this.sprite = sprite;
+    this.run = run;
+    this.applyGravity = applyGravity;
+  }
+
+  update(fps) {
+    if(this.applyGravity)
+      this.velocity.y += (GRAVITY),
+    this.position.y += (this.velocity.y);
+    this.position.x += (this.velocity.x);
+
+    if (this.run !== 'once-and-stay-in-last-frame' || (this.run === 'once-and-stay-in-last-frame' && this.sprite.framesCurrent + 1 !== this.sprite.framesCount))
+      this.sprite.nextFrame(fps, 1);
+
+    this.draw();
+
+    if (
+      this.position.x + this.dimensions.width - scrollX < 0 ||
+      this.position.x - scrollX > canvas.width ||
+      this.position.y > canvas.height ||
+      (this.run === 'once' && this.sprite.framesCurrent + 1 === this.sprite.framesCount)
+    ) {
+      //if out of view or it showed all frames and it was runOnce then remove object 
+      effects.splice(effects.indexOf(this), 1);
+    }
+
+  }
+
+  draw() {
+    this.sprite.draw({
+      position: this.position,
+      dimensions: this.dimensions
+    });
+  }
+
+}
+
 class Debris {
   position = { x: 0, y: 0 };
   velocity = { x: 0, y: 0 };
@@ -103,10 +206,10 @@ class Debris {
 
   }
 
-  update() {
-    this.velocity.y += GRAVITY
-    this.position.y += this.velocity.y;
-    this.position.x += this.velocity.x;
+  update(fps) {
+    this.velocity.y += (GRAVITY),
+      this.position.y += (this.velocity.y);
+    this.position.x += (this.velocity.x);
 
     if (
       this.position.x + this.dimensions.width - scrollX < 0 ||
@@ -179,7 +282,7 @@ class Platform {
     this.visible = visible;
     switch (true) {
       case color === "lightbrown":
-      case color === "multicoin":
+      case color === "multitreat":
       case color === "starhidden":
         this.img = imageStore.brownBlock
         break;
@@ -193,7 +296,7 @@ class Platform {
         this.img = imageStore.pipe;
         break;
       case color === "powerup":
-      case color === "coin":
+      case color === "treat":
       case color === "1up":
       case color === "star":
         this.img = imageStore.surpriseBlock
@@ -212,8 +315,7 @@ class Platform {
     if (this.color === 'disabled') return;
 
     if (from === 'bottom') {
-      if (this.color === 'coin' || this.color === 'powerup' || this.color === '1up' || this.color === 'starhidden' || this.color === 'star') {
-        // if coin - add coin to count, play sound and animate coin sprite
+      if (this.color === 'treat' || this.color === 'powerup' || this.color === '1up' || this.color === 'starhidden' || this.color === 'star') {
         // if powerup - check player powers and deternmine type of power up, based on that create power up on top of platform and add to power up array, play sound
         if (this.color === 'powerup') {
           switch (powers) {
@@ -292,14 +394,51 @@ class Platform {
             }),
           }));
           playAudio(audioStore.powerUpEffect);
+        } else if (this.color === 'treat') {
+          const treatEffect = new Effect({
+            position: { x: this.position.x, y: this.position.y - 50 },
+            dimensions: { width: 50, height: 50 },
+            velocity: { x: 0, y: -16 },
+            run: 'once',
+            sprite: new Sprite({
+              img: imageStore.treat,
+              framesCount: 11,
+              position: { x: 0, y: 0 },
+              offset: { x: 64, y: 0 },
+              printOffset: { x: 0, y: 0 },
+              dimensions: { width: 64, height: 64 },
+              margin: { top: 7, bottom: 7, left: 7, right: 7 },
+              framesRefreshFrequency: 2,
+            })
+          })
+          effects.push(treatEffect);
+          game.addTreats(1);
         }
         // if 1up - create 1up on top of platform and add to powerup array, play sound
         // if star or starhidden - create 1up on top of platform and add to powerup array, play sound
         this.color = 'disabled'
         this.img = imageStore.disabledBlock;
       }
-      if (this.color === 'multicoin') {
-        // if multicoin - add coint to count, play sound, animate coin sprite, set timer to disable
+      if (this.color === 'multitreat') {
+        const treatEffect = new Effect({
+          position: { x: this.position.x, y: this.position.y - 50 },
+          dimensions: { width: 50, height: 50 },
+          velocity: { x: 0, y: -16 },
+          run: 'once',
+          sprite: new Sprite({
+            img: imageStore.treat,
+            framesCount: 11,
+            position: { x: 0, y: 0 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 0 },
+            dimensions: { width: 64, height: 64 },
+            margin: { top: 7, bottom: 7, left: 7, right: 7 },
+            framesRefreshFrequency: 2,
+          })
+        })
+        effects.push(treatEffect);
+        game.addTreats(1);
+
         setTimeout(() => {
           this.color = 'disabled'
           this.img = imageStore.disabledBlock;
@@ -317,9 +456,9 @@ class Platform {
     }
   }
 
-  update() {
-    this.velocity.y += GRAVITY
-    this.position.y += this.velocity.y;
+  update(fps) {
+    this.velocity.y += GRAVITY,
+      this.position.y += (this.velocity.y);
     if (this.position.y >= this.maxY) {
       this.velocity.y = 0;
       this.position.y = this.maxY;
@@ -491,12 +630,12 @@ class Monster {
 
   }
 
-  update() {
+  update(fps) {
     if (this.isDying) {
 
       if (!this.stomped) {
-        this.position.y += this.velocity.y;
-        this.velocity.y += GRAVITY;
+        this.position.y += (this.velocity.y);
+        this.velocity.y += (GRAVITY);
       }
 
       this.draw();
@@ -522,7 +661,7 @@ class Monster {
         break;
     }
 
-    this.sprite.nextFrame(1);
+    this.sprite.nextFrame(fps, 1);
 
     // check collisions with platforms from top to down
     for (let i = 0; i < platforms.length; i++) {
@@ -571,8 +710,8 @@ class Monster {
       }
     }
 
-    this.position.y += this.velocity.y;
-    this.velocity.y += GRAVITY;
+    this.position.y += (this.velocity.y);
+    this.velocity.y += (GRAVITY);
 
     // check collissions with platforms horizontally
     for (let i = 0; i < platforms.length; i++) {
@@ -600,7 +739,7 @@ class Monster {
       this.velocity.x = -this.velocity.x;
     }
 
-    this.position.x += this.velocity.x;
+    this.position.x += (this.velocity.x);
 
     this.draw();
   }
@@ -708,8 +847,8 @@ class MonsterRoomba extends Monster {
     this.sprite = this.sprites.runLeft;
   }
 
-  update() {
-    super.update();
+  update(fps) {
+    super.update(fps);
 
     //check collision with other monsters
     for (let i = 0; i < monsters.length; i++) {
@@ -742,7 +881,7 @@ class MonsterRoomba extends Monster {
   }
 
   stompedByPlayer() {
-    if (this.velocity.x != 0)
+    if (this.velocity.x !== 0)
       this.velocity.x = 0;
     else if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
       this.velocity.x = 10
@@ -752,11 +891,15 @@ class MonsterRoomba extends Monster {
   }
 
   collisionByPlayer() {
+    if (this.velocity.x !== 0)
+      return COLLISIONRESULT.TAKEHIT;
+
     if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
       this.velocity.x = 10
     else
       this.velocity.x = -10
-    return COLLISIONRESULT.NOHIT;    
+    return COLLISIONRESULT.NOHIT;
+
   }
 
   die(cb, stomped = false) {
@@ -856,8 +999,8 @@ class Sprite {
 
   }
 
-  nextFrame(speedBooster) {
-    this.framesRefreshCount++;
+  nextFrame(fps, speedBooster) {
+    this.framesRefreshCount += 1;
     if (this.framesRefreshCount > this.framesRefreshFrequency / speedBooster) {
       this.framesRefreshCount = 0;
       this.framesCurrent = (this.framesCurrent + 1) % this.framesCount;
@@ -867,7 +1010,7 @@ class Sprite {
 
 class Player {
   constructor() {
-    this.position = { x: 100, y: 425 };
+    this.position = { x: 150, y: 450 };
     this.velocity = { x: 0, y: 0 };
     this.dimensions = { width: 42, height: 42 };
     this.resizeDimensions = { ...this.dimensions };
@@ -876,6 +1019,8 @@ class Player {
     this.isAlive = true;
     this.coolingDown = false;
     this.isDiying = false;
+    this.hasWon = false;
+    this.isWinning = false;
     this.powers = PLAYER_POWERS.NONE;
     this.isInvincible = false
     this.offsetModes = {
@@ -1032,14 +1177,61 @@ class Player {
     }
   }
 
-  update() {
+  update(fps) {
     if (this.isDying) {
-      this.position.y += this.velocity.y;
-      this.velocity.y += GRAVITY;
+      this.velocity.y += (GRAVITY);
+      this.position.y += (this.velocity.y);
       this.draw();
     }
 
     if (!this.isAlive) return;
+
+    if(player.hasWon) return;
+
+    if(player.isWinning) {
+      if (player.position.x < teepeeX + imageStore.teepee.width / 2 - player.dimensions.width/2) {
+        player.velocity.x = 5;
+      } else {
+        player.velocity.x = 0;        
+        effects.push(new Effect({
+          position: { x: teepeeX + imageStore.teepee.width/2 - (this.dimensions.width/2), y: 500-this.dimensions.height},
+          dimensions: { width: this.dimensions.width, height: this.dimensions.height },
+          velocity: { x: 0, y: 0 },
+          run: 'once-and-stay-in-last-frame',
+          applyGravity: false,
+          sprite: new Sprite({
+            img: imageStore.enterTeepee,
+            framesCount: 9,
+            position: { x: 0, y: 0 },
+            offset: { x: 64, y: 0 },
+            printOffset: { x: 0, y: 2 },
+            dimensions: { width: 64, height: 64 },
+            margin: { top: 22, bottom: 0, left: 11, right: 11 },
+            framesRefreshFrequency: 12,
+          })
+        }));
+        //add front of Teepee as top layer to create illusion of entering the Teepee
+        effects.push(new Effect({
+          position: { x: teepeeX, y: 504 - imageStore.teepeeFront.height },
+          dimensions: { width: imageStore.teepeeFront.width, height: imageStore.teepeeFront.height},
+          velocity: { x: 0, y: 0 },
+          run: 'once-and-stay-in-last-frame',
+          applyGravity: false,
+          sprite: new Sprite({
+            img: imageStore.teepeeFront,
+            framesCount: 1,
+            position: { x: 0, y: 0 },
+            offset: { x: 0, y: 0 },
+            printOffset: { x: 0, y: 0 },
+            dimensions: { width: imageStore.teepeeFront.width, height: imageStore.teepeeFront.height },
+            margin: { top: 0, bottom: 0, left: 0, right: 0 },
+            framesRefreshFrequency: 1,
+          })
+        }));
+        this.hasWon = true;
+        return;
+      }
+    }
 
     switch (true) {
       case this.direction === "right" && this.velocity.x === 0 && this.velocity.y === GRAVITY:
@@ -1068,7 +1260,7 @@ class Player {
         break;
     }
 
-    this.sprite.nextFrame(speedBooster);
+    this.sprite.nextFrame(fps, speedBooster);
 
     // resize height if needed
     if (this.dimensions.height < this.resizeDimensions.height) {
@@ -1173,8 +1365,8 @@ class Player {
       }
     }
 
-    this.position.y += this.velocity.y;
-    this.velocity.y += GRAVITY;
+    this.position.y += (this.velocity.y);
+    this.velocity.y += (GRAVITY);
 
     // check collissions with platforms horizontally
     for (let i = 0; i < platforms.length; i++) {
@@ -1218,8 +1410,8 @@ class Player {
           monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
         }
         else if (this.position.y + this.dimensions.height <
-            monster.position.y + monster.dimensions.height / 2 &&
-            this.velocity.y > 0
+          monster.position.y + monster.dimensions.height / 2 &&
+          this.velocity.y > 0
         ) {
           // Player stomp on top of monster
           monster.stompedByPlayer();
@@ -1228,7 +1420,7 @@ class Player {
         else {
           // Player hit from bottom or side the monster
           if (monster.collisionByPlayer() === COLLISIONRESULT.TAKEHIT) {
-            if (this.powers === PLAYER_POWERS.NONE) 
+            if (this.powers === PLAYER_POWERS.NONE)
               this.die(() => {
                 alert("you lose!");
                 location.reload(false);
@@ -1239,7 +1431,7 @@ class Player {
               setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false }, 2000);
             }
           }
-        } 
+        }
         break;
       }
     }
@@ -1287,8 +1479,7 @@ class Player {
             }, 8000);
             break;
           case PLAYER_POWERS.ONEUP:
-            playAudio(audioStore.oneLiveUpEffect);
-            //play powerup audio effect
+            game.addLives(1);
             break;
         }
         powerUps.splice(i, 1);
@@ -1301,7 +1492,12 @@ class Player {
       this.velocity.x = 0;
     }
 
-    this.position.x += this.velocity.x;
+    // check move beyond end of map
+    if (this.position.x + this.velocity.x + this.dimensions.width > game.map.end) {
+      this.velocity.x = 0;
+    }
+
+    this.position.x += (this.velocity.x);
 
     this.draw();
   }
@@ -1320,6 +1516,10 @@ class Player {
           offsetMode: this.offsetModes[mode]
         });
     }
+  }
+
+  win() {
+    this.isWinning = true;
   }
 
   die(cb) {
@@ -1357,6 +1557,7 @@ function createPlatformBlocks({ position, dimensions, color, collisions, blockWi
 
 }
 
+const game = new Game();
 const player = new Player();
 const debris = [];
 const platforms = [
@@ -1369,13 +1570,13 @@ const platforms = [
     position: { x: 350, y: 300 },
     dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 650, y: 100 },
     dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 550, y: 300 },
@@ -1397,7 +1598,7 @@ const platforms = [
     position: { x: 700, y: 300 },
     dimensions: { width: 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 750, y: 300 },
@@ -1472,12 +1673,12 @@ const platforms = [
   new Platform({
     position: { x: 2650 + 23 * 50, y: 300 },
     dimensions: { width: 50, height: 50 },
-    color: 'multicoin'
+    color: 'multitreat'
   }),
   new Platform({
     position: { x: 2650 + 23 * 50, y: 100 },
     dimensions: { width: 50, height: 50 },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 2650 + 28 * 50, y: 300 },
@@ -1491,12 +1692,12 @@ const platforms = [
   new Platform({
     position: { x: 2650 + 34 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 2650 + 37 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
-    color: 'coin'
+    color: 'treat'
   }),
   ...createPlatformBlocks({
     blockWidth: 50,
@@ -1507,7 +1708,7 @@ const platforms = [
   new Platform({
     position: { x: 2650 + 40 * 50, y: 300 },
     dimensions: { width: 1 * 50, height: 50 },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 2650 + 46 * 50, y: 300 },
@@ -1526,7 +1727,7 @@ const platforms = [
     blockWidth: 50,
     position: { x: 2650 + 57 * 50, y: 100 },
     dimensions: { width: 2 * 50, height: 50 },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 2650 + 59 * 50, y: 100 },
@@ -1660,7 +1861,7 @@ const platforms = [
     position: { x: 2650 + 73 * 50 + 25 * 50, y: 300 },
     dimensions: { width: 2 * 50, height: 50 },
     collisions: { horizontal: true, vertical: true },
-    color: 'coin'
+    color: 'treat'
   }),
   new Platform({
     position: { x: 2650 + 75 * 50 + 25 * 50, y: 300 },
@@ -1732,6 +1933,8 @@ const platforms = [
 const powerUps = [];
 
 const fireballs = [];
+
+const effects = [];
 
 const monsters = [
   new Monster({
@@ -1822,9 +2025,27 @@ function playBackgroundMusic() {
   // myAudio.pause();
 }
 
-function animate() {
+let lastAnimationFrameTime = Date.now();
+let realLastTime = Date.now();
+
+function animate(newTimestamp) {
   canvas.width = 960;
   canvas.height = 540;
+
+  const expectedFPS = 60;
+
+  const now = newTimestamp
+
+  let deltaTime = 1000 / expectedFPS;
+
+  if (newTimestamp !== 0)
+    deltaTime = now - lastAnimationFrameTime
+
+  //console.log(newTimestamp, lastAnimationFrameTime, deltaTime);
+
+  lastAnimationFrameTime = newTimestamp
+
+  fps = 1;
 
   const scrollXBackground = (scrollX / 2) % Math.floor(backgroundImg.width / 2);
   ctx.drawImage(
@@ -1853,16 +2074,30 @@ function animate() {
     "rgba(0,0,0," + Math.round((scrollX / 25000) * 100) / 100 + ")";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  platforms.forEach((platform) => platform.update());
-  powerUps.forEach((powerUp) => powerUp.update());
-  player.update();
-  fireballs.forEach((fireball) => fireball.update());
-  monsters.forEach((monster) => monster.update());
-  debris.forEach((debris_one) => debris_one.update());
+  platforms.forEach((platform) => platform.update(fps));
+  //Teepee
+  teepeeX = game.map.end - canvas.width / 3 - imageStore.teepee.width / 2;  
+  if (teepeeX + imageStore.teepee.width - scrollX > 0 && teepeeX - scrollX < canvas.width) {
+    ctx.drawImage(
+      imageStore.teepee,
+      teepeeX - scrollX,
+      504 - imageStore.teepee.height,
+      imageStore.teepee.width,
+      imageStore.teepee.height);
+  }
+
+  powerUps.forEach((powerUp) => powerUp.update(fps));
+  player.update(fps);
+  fireballs.forEach((fireball) => fireball.update(fps));
+  monsters.forEach((monster) => monster.update(fps));
+  debris.forEach((debris_one) => debris_one.update(fps));
+  effects.forEach((effect) => effect.update(fps));
+  game.update();
 
   //adjust scroll right side
   if (player.position.x - scrollX > canvas.width / 2) {
-    scrollX = player.position.x - canvas.width / 2;
+    scrollX = (player.position.x - canvas.width / 2);
+    if (scrollX > game.map.end - canvas.width) scrollX = game.map.end - canvas.width
   }
 
   //adjust scroll left side
@@ -1884,6 +2119,19 @@ function animate() {
     });
   }
 
+  //check for winning condition
+  if (
+    player.position.x > game.map.end - canvas.width &&
+    player.isAlive &&
+    !player.hasWon
+  ) {
+    audioStore.winJingle.play();
+    audioStore.backgroundMusic.pause();
+    player.win();
+  }
+
+
+
   requestAnimationFrame(animate);
 }
 
@@ -1892,7 +2140,7 @@ addEventListener("keydown", ({ key }) => {
     case "w":
     case "W":
     case "ArrowUp":
-      if (!player.isJumping && player.velocity.y == GRAVITY) {
+      if (!player.isJumping && (player.velocity.y == GRAVITY || player.velocity.y == GRAVITY)) {
         player.jump();
       }
       break;
@@ -1975,16 +2223,16 @@ class PowerUp {
 
   }
 
-  update() {
+  update(fps) {
 
-    this.framesCountToActivate++;
+    this.framesCountToActivate += 1;
     if (this.framesCountToActivate >= this.activationFrames) {
       this.isActivated = true;
     }
 
     if (this.isActivated) {
 
-      if (this.sprite !== null) this.sprite.nextFrame(1);
+      if (this.sprite !== null) this.sprite.nextFrame(fps, 1);
 
       // check collisions with platforms from top to down
       for (let i = 0; i < platforms.length; i++) {
@@ -2125,9 +2373,9 @@ class FireBall {
     if (this.sprites.fire) this.sprite = this.sprites.fire;
   }
 
-  update() {
+  update(fps) {
 
-    if (this.sprite !== null) this.sprite.nextFrame(1);
+    if (this.sprite !== null) this.sprite.nextFrame(fps, 1);
 
     if (this.isAlive) {
 
@@ -2174,8 +2422,8 @@ class FireBall {
         }
       }
 
-      this.position.y += this.velocity.y;
-      this.velocity.y += GRAVITY;
+      this.position.y += (this.velocity.y);
+      this.velocity.y += (GRAVITY);
 
       // check colission with monsters
       for (let i = 0; i < monsters.length; i++) {
@@ -2234,7 +2482,7 @@ class FireBall {
       }
 
 
-      this.position.x += this.velocity.x;
+      this.position.x += (this.velocity.x);
     }
 
     this.draw();
@@ -2277,5 +2525,6 @@ class FireBall {
   }
 
 }
+
 
 
