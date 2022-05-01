@@ -1,6 +1,6 @@
 *, *::after, *::before {
     box-sizing: border-box;
-    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    font-family: 'Press Start 2P', cursive;
 }
 
 html, body {
@@ -13,7 +13,7 @@ html, body {
 }
 
 body {
-    position:relative;
+    font-size: 10px;
 }
 
 canvas#game-canvas {
@@ -25,14 +25,21 @@ canvas#game-canvas {
     display: none;
 }
 
+
+#container {
+    position: relative;
+    width: 960px;
+}
+
 #score {
     position: absolute;
     display: flex;
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    width: 960px;
     top:0px;
+    left: 0px;
+    right: 0px;
     padding: 1rem;
 
 }
@@ -40,8 +47,15 @@ canvas#game-canvas {
 h3 {
     color: rgba(0,0,0,.8);
     flex-grow: 1;
+    padding: 0;
+    margin: 0;
 }
 
 span {
     font-weight: lighter
+}
+
+.out-of-time {
+    font-weight: bolder;
+    color:rgba(255,0,0,.6);
 }

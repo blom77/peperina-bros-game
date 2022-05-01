@@ -1,15 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Game</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="script.js" defer></script>
 </head>
+
 <body>
-    <div id="score"><h3>Lives: <span id="lives"></span></h3><h3>Points: <span id="points"></span></h3><h3>Treats: <span id="treats"></span></h3><h3>Time left: <span id="timeLeft"></span></h3></div>
-    <canvas id="game-canvas"></canvas> 
+    <div id="container">
+        <div id="score">
+            <h3>Lives: <span id="lives"></span></h3>
+            <h3>Score: <span id="points"></span></h3>
+            <h3>Treats: <span id="treats"></span></h3>
+            <h3>Time left: <span id="timeLeft"></span></h3>
+        </div>
+        <canvas id="game-canvas"></canvas>
+    </div>
     <button type="submit" id="button-start">START</button>
 </body>
+
 </html>

@@ -14,6 +14,22 @@ const PLAYER_POWERS = {
   ONEUP: '1up',
 }
 
+const ACTIONS = {
+  BREAKBLOCK: { points: 50 },
+  COLLECTTREAT: { points: 200 },
+  COLLECTPOWERUP: { points: 1000 },
+  BLOCKMONSTER: { points: 200 },//[100,200,400,500,800,1000,2000,4000,5000,8000,PLAYER_POWERS.ONEUP]},
+  STOMPMONSTER: { points: 100 },//[100,200,400,500,800,1000,2000,4000,5000,8000,PLAYER_POWERS.ONEUP]},
+  FIREBALLMONSTER: { points: 200 },
+  ROOMBAMONSTER: { points: 500 },//[500,800,1000,2000,4000,5000,8000,PLAYER_POWERS.ONEUP]},
+  KICKROOMBA: { points: 400 },
+  REMAININGSECOND: { points: 50 },
+  ONEUP: { points: 1000 },
+  INVINCIBLEMONSTER: { points: 400 },
+  FINISHLEVELHEIGHT: {points: 50}
+}
+
+
 const COLLISIONRESULT = {
   NOHIT: 'no-hit',
   TAKEHIT: 'take-hit',
@@ -59,6 +75,7 @@ let teepeeX;
 
 function startGame() {
   btnStart.classList.add('hide');
+  game.start();
   audioStore.backgroundMusic.play();
   requestAnimationFrame(animate);
 }
@@ -98,10 +115,52 @@ class Game {
     this.lives = 3;
     this.treatsToGetLive = 10;
     this.map = { end: 9550 };
+    this.timeEnd = null;
+    this.timeLeft = null;
+    this.started = false;
   }
 
   update() {
+    if (this.started) {
+      const currentTime = Date.now();
+      this.timeLeft = Math.max(Math.ceil((this.timeEnd - currentTime) / 1000), 0);
+
+      if (this.timeLeft <= 15)
+        elTimeLeft.classList.add('out-of-time');
+      else
+        elTimeLeft.classList.remove('out-of-time');
+    }
     this.draw();
+  }
+
+  start(levelDuration = 90000) {
+    this.started = true;
+    this.timeLeft = Math.floor(levelDuration / 1000);
+    this.timeEnd = Date.now() + levelDuration;
+  }
+
+  applyBonusPointsForTimeLeft() {
+    if (this.timeLeft > 0) {
+      setTimeout(() => {
+        this.addPoints({ action: ACTIONS.REMAININGSECOND, times: 1, show: false })
+        playAudio(audioStore.whisleEffect)
+        this.timeLeft = Math.floor(this.timeLeft - 1);
+        this.applyBonusPointsForTimeLeft();
+      }, 100);
+    }
+  }
+
+
+  finish() {
+    this.started = false;
+  }
+
+  addPoints({ action = ACTIONS.STOMPMONSTER, times = 1, show = true, position = { x: 0, y: 0 } }) {
+    if (show) {
+      effects.push(new PointEffect({ position, value: action.points * times }));
+      if (action === ACTIONS.ONEUP) effects.push(new PointEffect({ position: { x: position.x + 10, y: position.y - 20 }, value: '1UP' }));
+    }
+    this.points += action.points * times;
   }
 
   addLives(plusLives) {
@@ -123,7 +182,8 @@ class Game {
     elTreats.textContent = this.treats;
     elLives.textContent = this.lives;
     elPoints.textContent = this.points;
-    elTimeLeft.textContent = "catchphrase..."
+    const timeMilitarFormat = '' + (10000 + Math.floor(this.timeLeft / 60) * 100 + this.timeLeft % 60);
+    elTimeLeft.textContent = timeMilitarFormat.substring(1, 3) + ":" + timeMilitarFormat.substring(3, 5);
   }
 }
 
@@ -151,8 +211,8 @@ class Effect {
   }
 
   update(fps) {
-    if(this.applyGravity)
-      this.velocity.y += (GRAVITY),
+    if (this.applyGravity)
+      this.velocity.y += (GRAVITY);
     this.position.y += (this.velocity.y);
     this.position.x += (this.velocity.x);
 
@@ -178,6 +238,46 @@ class Effect {
       position: this.position,
       dimensions: this.dimensions
     });
+  }
+
+}
+
+class PointEffect extends Effect {
+  constructor({
+    position,
+    velocity = { x: 0.5, y: -1 },
+    value,
+    expireAfter = 1500,
+  }) {
+    super({
+      position,
+      velocity,
+      dimensions: { width: 20, height: 20 },
+      applyGravity: false
+    });
+    this.value = value;
+    this.expireTime = Date.now() + expireAfter;
+  }
+
+  update() {
+    if (this.applyGravity)
+      this.velocity.y += (GRAVITY);
+    this.position.y += (this.velocity.y);
+    this.position.x += (this.velocity.x);
+
+    if (Date.now() >= this.expireTime) {
+      effects.splice(effects.indexOf(this), 1);
+      return;
+    }
+    this.draw();
+  }
+
+  draw() {
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.strokeStyle = 'rgba(128,128,128,0.5)'
+    ctx.strokeText(this.value, this.position.x + 1 - scrollX, this.position.y + 1);
+    ctx.fillText(this.value, this.position.x - scrollX, this.position.y);
   }
 
 }
@@ -413,6 +513,7 @@ class Platform {
           })
           effects.push(treatEffect);
           game.addTreats(1);
+          game.addPoints({ action: ACTIONS.COLLECTTREAT, position: { x: this.position.x + 15, y: this.position.y - 20 } });
         }
         // if 1up - create 1up on top of platform and add to powerup array, play sound
         // if star or starhidden - create 1up on top of platform and add to powerup array, play sound
@@ -438,6 +539,7 @@ class Platform {
         })
         effects.push(treatEffect);
         game.addTreats(1);
+        game.addPoints({ action: ACTIONS.COLLECTTREAT, position: { x: this.position.x + 15, y: this.position.y - 20 } });
 
         setTimeout(() => {
           this.color = 'disabled'
@@ -449,6 +551,8 @@ class Platform {
         const monster = monsters[i];
         if (rectCollision(this.position.x, this.position.y - 5, this.dimensions.width, this.dimensions.height,
           monster.position.x, monster.position.y, monster.dimensions.width, monster.dimensions.height)) {
+          game.addPoints({ action: ACTIONS.BLOCKMONSTER, position: { x: monster.position.x, y: monster.position.y - 20 } });
+
           monster.die(() => monsters.splice(monsters.indexOf(monster), 1))
           break;
         }
@@ -854,8 +958,8 @@ class MonsterRoomba extends Monster {
     for (let i = 0; i < monsters.length; i++) {
       const monster = monsters[i];
       // if monster is close to become visible
-      if (monster.position.x + monster.dimensions.width - scrollX > - 150 &&
-        monster.position.x - scrollX < canvas.width + 150)
+      if (monster.position.x + monster.dimensions.width - scrollX > - canvas.width / 3 &&
+        monster.position.x - scrollX < canvas.width + canvas.width / 3)
         if (
           monster !== this &&
           monster.isAlive &&
@@ -870,6 +974,7 @@ class MonsterRoomba extends Monster {
             monster.dimensions.height
           )
         ) {
+          game.addPoints({ action: ACTIONS.ROOMBAMONSTER, position: { x: monster.position.x, y: monster.position.y - 20 } });
           monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
         }
     }
@@ -881,12 +986,16 @@ class MonsterRoomba extends Monster {
   }
 
   stompedByPlayer() {
-    if (this.velocity.x !== 0)
+    if (this.velocity.x !== 0) {
       this.velocity.x = 0;
-    else if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
-      this.velocity.x = 10
-    else
-      this.velocity.x = -10
+      game.addPoints({ action: ACTIONS.STOMPMONSTER, position: { x: this.position.x, y: this.position.y - 20 } });
+    } else {
+      if (player.position.x + player.dimensions.width / 2 < this.position.x + this.dimensions.width / 2)
+        this.velocity.x = 10
+      else
+        this.velocity.x = -10;
+      game.addPoints({ action: ACTIONS.KICKROOMBA, position: { x: this.position.x, y: this.position.y - 20 } });
+    }
     return COLLISIONRESULT.NOHIT
   }
 
@@ -898,6 +1007,7 @@ class MonsterRoomba extends Monster {
       this.velocity.x = 10
     else
       this.velocity.x = -10
+    game.addPoints({ action: ACTIONS.KICKROOMBA, position: { x: this.position.x, y: this.position.y - 20 } });
     return COLLISIONRESULT.NOHIT;
 
   }
@@ -1012,7 +1122,7 @@ class Player {
   constructor() {
     this.position = { x: 150, y: 450 };
     this.velocity = { x: 0, y: 0 };
-    this.dimensions = { width: 42, height: 42 };
+    this.dimensions = { width: 40, height: 40 };
     this.resizeDimensions = { ...this.dimensions };
     this.direction = "right";
     this.isJumping = true;
@@ -1173,7 +1283,7 @@ class Player {
       this.coolingDown = true;
       setTimeout(() => {
         this.coolingDown = false;
-      }, 100);
+      }, 1000);
     }
   }
 
@@ -1186,15 +1296,15 @@ class Player {
 
     if (!this.isAlive) return;
 
-    if(player.hasWon) return;
+    if (this.hasWon) return;
 
-    if(player.isWinning) {
-      if (player.position.x < teepeeX + imageStore.teepee.width / 2 - player.dimensions.width/2) {
-        player.velocity.x = 5;
+    if (this.isWinning) {
+      if (this.position.x < teepeeX + imageStore.teepee.width / 2 - this.dimensions.width / 2) {
+        this.velocity.x = 5;
       } else {
-        player.velocity.x = 0;        
+        this.velocity.x = 0;
         effects.push(new Effect({
-          position: { x: teepeeX + imageStore.teepee.width/2 - (this.dimensions.width/2), y: 500-this.dimensions.height},
+          position: { x: teepeeX + imageStore.teepee.width / 2 - (this.dimensions.width / 2), y: 500 - this.dimensions.height },
           dimensions: { width: this.dimensions.width, height: this.dimensions.height },
           velocity: { x: 0, y: 0 },
           run: 'once-and-stay-in-last-frame',
@@ -1213,7 +1323,7 @@ class Player {
         //add front of Teepee as top layer to create illusion of entering the Teepee
         effects.push(new Effect({
           position: { x: teepeeX, y: 504 - imageStore.teepeeFront.height },
-          dimensions: { width: imageStore.teepeeFront.width, height: imageStore.teepeeFront.height},
+          dimensions: { width: imageStore.teepeeFront.width, height: imageStore.teepeeFront.height },
           velocity: { x: 0, y: 0 },
           run: 'once-and-stay-in-last-frame',
           applyGravity: false,
@@ -1228,6 +1338,9 @@ class Player {
             framesRefreshFrequency: 1,
           })
         }));
+        setTimeout(() => {
+          game.applyBonusPointsForTimeLeft();
+        }, 2000);
         this.hasWon = true;
         return;
       }
@@ -1357,6 +1470,7 @@ class Player {
               dimensions: { width: 16, height: 16 },
               color: "lightbrown"
             }));
+            game.addPoints({ action: ACTIONS.BREAKBLOCK, position: { x: platform.position.x, y: platform.position.y - 20 } });
             platforms.splice(i, 1);
           }
         }
@@ -1407,28 +1521,31 @@ class Player {
         )
       ) {
         if (this.isInvincible) {
+          game.addPoints({ action: ACTIONS.INVINCIBLEMONSTER, position: { x: monster.position.x, y: monster.position.y - 20 } });
           monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
         }
         else if (this.position.y + this.dimensions.height <
-          monster.position.y + monster.dimensions.height / 2 &&
+          monster.position.y + 2 * monster.dimensions.height / 3 &&
           this.velocity.y > 0
         ) {
           // Player stomp on top of monster
+          game.addPoints({ action: ACTIONS.STOMPMONSTER, position: { x: monster.position.x, y: monster.position.y - 20 } });
           monster.stompedByPlayer();
           this.velocity.y = -10
         }
         else {
           // Player hit from bottom or side the monster
           if (monster.collisionByPlayer() === COLLISIONRESULT.TAKEHIT) {
-            if (this.powers === PLAYER_POWERS.NONE)
+            if (this.powers === PLAYER_POWERS.NONE && !this.poweringDown)
               this.die(() => {
                 alert("you lose!");
                 location.reload(false);
               });
             else {
               this.poweringDown = true;
+              this.powers = PLAYER_POWERS.NONE;
               this.resizeDimensions = { width: 40, height: 40 }
-              setTimeout(() => { this.powers = PLAYER_POWERS.NONE, this.poweringDown = false }, 2000);
+              setTimeout(() => {this.poweringDown = false }, 1500);
             }
           }
         }
@@ -1455,20 +1572,23 @@ class Player {
           case PLAYER_POWERS.SUPER:
             if (this.powers === PLAYER_POWERS.NONE) {
               this.powers = PLAYER_POWERS.SUPER
-              this.resizeDimensions = { width: 50, height: 50 }
+              this.resizeDimensions = { width: 48, height: 48 }
             }
             playAudio(audioStore.powerUpAppliedEffect);
+            game.addPoints({ action: ACTIONS.COLLECTPOWERUP, position: { x: this.position.x, y: this.position.y - 20 } });
             break;
           case PLAYER_POWERS.FIREBALL:
             if (this.powers === PLAYER_POWERS.NONE || this.powers === PLAYER_POWERS.SUPER) {
               this.powers = PLAYER_POWERS.FIREBALL
-              this.resizeDimensions = { width: 50, height: 50 }
+              this.resizeDimensions = { width: 48, height: 48 }
             }
             playAudio(audioStore.powerUpAppliedEffect);
+            game.addPoints({ action: ACTIONS.COLLECTPOWERUP, position: { x: this.position.x, y: this.position.y - 20 } });
             break;
           case PLAYER_POWERS.INVINCIBLE:
             //dont play power up effect, just accelerate bacgkround music
             this.isInvincible = true;
+            game.addPoints({ action: ACTIONS.COLLECTPOWERUP, position: { x: this.position.x, y: this.position.y - 20 } });
             audioStore.backgroundMusic.playbackRate = 1.5
             setTimeout(() => {
               audioStore.backgroundMusic.playbackRate = 0.75
@@ -1479,6 +1599,7 @@ class Player {
             }, 8000);
             break;
           case PLAYER_POWERS.ONEUP:
+            game.addPoints({ action: ACTIONS.ONEUP, position: { x: this.position.x, y: this.position.y - 20 } });
             game.addLives(1);
             break;
         }
@@ -1530,7 +1651,7 @@ class Player {
     this.velocity.y = -20;
     this.dimensions.height = -this.dimensions.height  //invert sprite vertically
     this.sprite = this.sprites.standLeft;
-    setTimeout(cb, 1000);
+    setTimeout(cb, 2000);
   }
 }
 
@@ -2041,8 +2162,6 @@ function animate(newTimestamp) {
   if (newTimestamp !== 0)
     deltaTime = now - lastAnimationFrameTime
 
-  //console.log(newTimestamp, lastAnimationFrameTime, deltaTime);
-
   lastAnimationFrameTime = newTimestamp
 
   fps = 1;
@@ -2076,7 +2195,7 @@ function animate(newTimestamp) {
 
   platforms.forEach((platform) => platform.update(fps));
   //Teepee
-  teepeeX = game.map.end - canvas.width / 3 - imageStore.teepee.width / 2;  
+  teepeeX = game.map.end - canvas.width / 3 - imageStore.teepee.width / 2;
   if (teepeeX + imageStore.teepee.width - scrollX > 0 && teepeeX - scrollX < canvas.width) {
     ctx.drawImage(
       imageStore.teepee,
@@ -2110,9 +2229,11 @@ function animate(newTimestamp) {
 
   //check for losing condition
   if (
-    player.position.y + player.dimensions.height / 2 > canvas.height &&
-    player.isAlive
+    (player.position.y + player.dimensions.height / 2 > canvas.height ||
+      game.timeLeft === 0) &&
+    player.isAlive && !player.isWinning && !player.hasWon
   ) {
+    game.finish();
     player.die(() => {
       alert("you lose!");
       location.reload(false);
@@ -2123,10 +2244,18 @@ function animate(newTimestamp) {
   if (
     player.position.x > game.map.end - canvas.width &&
     player.isAlive &&
-    !player.hasWon
+    !player.hasWon &&
+    !player.isWinning
   ) {
+    game.finish();
     audioStore.winJingle.play();
     audioStore.backgroundMusic.pause();
+    //debugger;
+    game.addPoints({
+      action: ACTIONS.FINISHLEVELHEIGHT,
+      position: { x: player.position.x, y: Math.max(player.position.y - 20, 100) },
+      times: Math.floor((canvas.height - player.position.y) / 5)
+    });
     player.win();
   }
 
@@ -2442,6 +2571,7 @@ class FireBall {
             monster.dimensions.height
           )
         ) {
+          game.addPoints({ action: ACTIONS.FIREBALLMONSTER, position: { x: monster.position.x, y: monster.position.y - 20 } });
           monster.die(() => monsters.splice(monsters.indexOf(monster), 1));
           fireballs.splice(fireballs.indexOf(this), 1);
           return;
