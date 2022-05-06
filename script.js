@@ -24,9 +24,9 @@ const ACTIONS = {
   ROOMBAMONSTER: { points: 500 },//[500,800,1000,2000,4000,5000,8000,PLAYER_POWERS.ONEUP]},
   KICKROOMBA: { points: 400 },
   REMAININGSECOND: { points: 50 },
-  ONEUP: { points: 1000 },
+  ONEUP: { points: 0 },
   INVINCIBLEMONSTER: { points: 400 },
-  FINISHLEVELHEIGHT: {points: 50}
+  FINISHLEVELHEIGHT: { points: 50 }
 }
 
 
@@ -157,8 +157,8 @@ class Game {
 
   addPoints({ action = ACTIONS.STOMPMONSTER, times = 1, show = true, position = { x: 0, y: 0 } }) {
     if (show) {
-      effects.push(new PointEffect({ position, value: action.points * times }));
-      if (action === ACTIONS.ONEUP) effects.push(new PointEffect({ position: { x: position.x + 10, y: position.y - 20 }, value: '1UP' }));
+      if (action === ACTIONS.ONEUP) effects.push(new PointEffect({ position: { x: position.x + 10, y: position.y - 20 }, value: '1UP' }))
+      else effects.push(new PointEffect({ position, value: action.points * times }));;
     }
     this.points += action.points * times;
   }
@@ -263,7 +263,7 @@ class PointEffect extends Effect {
     if (this.applyGravity)
       this.velocity.y += (GRAVITY);
     this.position.y += (this.velocity.y);
-    this.position.x += (this.velocity.x);
+    this.position.x += Math.sign(Math.random() - 0.5) * (this.velocity.x);
 
     if (Date.now() >= this.expireTime) {
       effects.splice(effects.indexOf(this), 1);
@@ -273,11 +273,16 @@ class PointEffect extends Effect {
   }
 
   draw() {
+    let x = this.position.x - scrollX;
+
+    if (x < 0) x = 10;
+    if (x > canvas.width - 30) x = canvas.width - 30
+
     ctx.font = '7px "Press Start 2P"';
     ctx.fillStyle = 'rgba(255,255,255,0.7)'
     ctx.strokeStyle = 'rgba(128,128,128,0.5)'
-    ctx.strokeText(this.value, this.position.x + 1 - scrollX, this.position.y + 1);
-    ctx.fillText(this.value, this.position.x - scrollX, this.position.y);
+    ctx.strokeText(this.value, x + 1, this.position.y + 1);
+    ctx.fillText(this.value, x, this.position.y);
   }
 
 }
@@ -291,7 +296,7 @@ class Debris {
 
   constructor({
     position,
-    velocity = { x: 0, y: 0 },
+    velocity = { x: 0, y: 0, angle: 0.1 },
     dimensions = { width: 20, height: 20 },
     color = "lightbrown"
   }) {
@@ -299,6 +304,7 @@ class Debris {
     this.position = position;
     this.dimensions = dimensions;
     this.color = color;
+    this.angle = 0;
 
     if (color === "lightbrown") {
       this.img = imageStore.debrisBrownBlock
@@ -310,6 +316,7 @@ class Debris {
     this.velocity.y += (GRAVITY),
       this.position.y += (this.velocity.y);
     this.position.x += (this.velocity.x);
+    this.angle += this.velocity.angle;
 
     if (
       this.position.x + this.dimensions.width - scrollX < 0 ||
@@ -327,7 +334,10 @@ class Debris {
     if (
       this.position.x + this.dimensions.width - scrollX > 0 &&
       this.position.x - scrollX < canvas.width
-    ) { // only draw if platform is visible in the screen
+    ) { // only draw if is visible in the screen
+      ctx.save();
+      ctx.translate(this.position.x - scrollX + this.dimensions.width / 2, this.position.y + this.dimensions.height / 2);
+      ctx.rotate(this.angle);
       if (this.img !== null) {
         ctx.drawImage(
           this.img,
@@ -335,24 +345,25 @@ class Debris {
           0,
           this.dimensions.width,
           this.dimensions.height,
-          this.position.x - scrollX,
-          this.position.y,
+          -this.dimensions.width / 2,
+          -this.dimensions.height / 2,
           this.dimensions.width,
           this.dimensions.height
         );
       } else {
         ctx.drawImage(
-          imageStore.brownBlock,
+          this.img,
           0,
           0,
           this.dimensions.width,
           this.dimensions.height,
-          this.position.x - scrollX,
-          this.position.y,
+          -this.dimensions.width / 2,
+          -this.dimensions.height / 2,
           this.dimensions.width,
           this.dimensions.height
         );
       }
+      ctx.restore();
     }
   }
 
@@ -1448,29 +1459,29 @@ class Player {
           if (this.powers !== PLAYER_POWERS.NONE && platform.color === "lightbrown" && !this.poweringDown) {
             debris.push(new Debris({
               position: { x: platform.position.x, y: platform.position.y },
-              velocity: { x: -4, y: -20 },
+              velocity: { x: -4, y: -20, angle: 0.3 },
               dimensions: { width: 16, height: 16 },
               color: "lightbrown"
             }));
             debris.push(new Debris({
               position: { x: platform.position.x + platform.dimensions.width - 16, y: platform.position.y },
-              velocity: { x: 4, y: -20 },
+              velocity: { x: 4, y: -20, angle: -0.3 },
               dimensions: { width: 16, height: 16 },
               color: "lightbrown"
             }));
             debris.push(new Debris({
               position: { x: platform.position.x, y: platform.position.y + platform.dimensions.height - 16 },
-              velocity: { x: -4, y: -10 },
+              velocity: { x: -4, y: -10, angle: 0.3 },
               dimensions: { width: 16, height: 16 },
               color: "lightbrown"
             }));
             debris.push(new Debris({
               position: { x: platform.position.x + platform.dimensions.width - 16, y: platform.position.y + platform.dimensions.height - 16 },
-              velocity: { x: 4, y: -10 },
+              velocity: { x: 4, y: -10, angle: -0.3 },
               dimensions: { width: 16, height: 16 },
               color: "lightbrown"
             }));
-            game.addPoints({ action: ACTIONS.BREAKBLOCK, position: { x: platform.position.x, y: platform.position.y - 20 } });
+            game.addPoints({ action: ACTIONS.BREAKBLOCK, position: { x: platform.position.x, y: platform.position.y - 20 }, show: false });
             platforms.splice(i, 1);
           }
         }
@@ -1545,7 +1556,7 @@ class Player {
               this.poweringDown = true;
               this.powers = PLAYER_POWERS.NONE;
               this.resizeDimensions = { width: 40, height: 40 }
-              setTimeout(() => {this.poweringDown = false }, 1500);
+              setTimeout(() => { this.poweringDown = false }, 1500);
             }
           }
         }
